@@ -1,0 +1,50 @@
+{
+  "name": "@flowdeck/app",
+  "productName": "FlowDeck",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Desktop canvas to orchestrate Claude Code sessions across accounts",
+  "author": "Danilo Herrera Alves <danilo.alves@ezycollect.com.au>",
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/daniloalves/flowdeck",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json && tsc -p tsconfig.e2e.json",
+    "rebuild:electron": "electron-rebuild -f -o better-sqlite3,node-pty",
+    "test": "ELECTRON_RUN_AS_NODE=1 electron ../../node_modules/vitest/vitest.mjs run",
+    "e2e": "electron-vite build && playwright test",
+    "dist": "electron-vite build && electron-builder --linux AppImage deb --publish never",
+    "dist:mac": "electron-vite build && electron-builder --mac dmg --publish never"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.1",
+    "@flowdeck/shared": "workspace:*",
+    "@playwright/test": "^1.64.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-search": "^0.16.0",
+    "@xterm/xterm": "^6.0.0",
+    "@xyflow/react": "^12.12.0",
+    "electron": "44.9.3",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^6.0.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "smol-toml": "1.9.1",
+    "typescript": "5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5",
+    "zod": "^4.6.7",
+    "zustand": "^5.0.16"
+  }
+}

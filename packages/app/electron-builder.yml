@@ -1,0 +1,32 @@
+appId: dev.flowdeck.app
+productName: FlowDeck
+artifactName: flowdeck-${version}-${arch}.${ext}
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - package.json
+extraResources:
+  - from: resources
+    to: resources
+  - from: ../mcp/dist/flowdeck-mcp.cjs
+    to: resources/flowdeck-mcp.cjs
+asarUnpack:
+  - "**/*.node"
+npmRebuild: false
+linux:
+  target: [AppImage, deb]
+  category: Development
+  executableName: flowdeck
+  synopsis: Canvas to orchestrate Claude Code sessions
+  maintainer: Danilo Herrera Alves <danilo.alves@ezycollect.com.au>
+mac:
+  # Experimental and unsigned (no Developer ID): open with right-click → Open the first time.
+  target: [dmg]
+  category: public.app-category.developer-tools
+  identity: null
+deb:
+  packageName: flowdeck
+  depends: [tmux, curl, libnotify4]
+publish: null

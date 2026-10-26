@@ -1,0 +1,24 @@
+{
+  "name": "@flowdeck/mcp",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "flowdeck-mcp: stdio MCP server that lets a FlowDeck node talk to its connected peers",
+  "bin": {
+    "flowdeck-mcp": "./dist/flowdeck-mcp.cjs"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/flowdeck-mcp.cjs --legal-comments=none",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@flowdeck/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "5.9.3",
+    "vitest": "^5.0.5",
+    "zod": "^4.6.7"
+  }
+}

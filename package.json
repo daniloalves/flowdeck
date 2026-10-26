@@ -1,0 +1,19 @@
+{
+  "name": "flowdeck",
+  "private": true,
+  "version": "0.3.0",
+  "description": "Desktop canvas to orchestrate Claude Code sessions across accounts",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@10.34.7",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @flowdeck/mcp build && pnpm --filter @flowdeck/app dev",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @flowdeck/mcp build && pnpm -r test",
+    "e2e": "pnpm --filter @flowdeck/mcp build && pnpm --filter @flowdeck/app e2e",
+    "build": "pnpm --filter @flowdeck/mcp build && pnpm --filter @flowdeck/app dist",
+    "postinstall": "pnpm --filter @flowdeck/app rebuild:electron"
+  }
+}
