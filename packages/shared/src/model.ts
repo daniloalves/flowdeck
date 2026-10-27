@@ -115,6 +115,22 @@ export interface Annotation extends NodeLayout {
   createdAt: number;
 }
 
+/** Saved settings for new nodes, picked in the task launcher. */
+export interface NodeTemplate {
+  id: string;
+  name: string;
+  kind: NodeKind;
+  /** Title of launched nodes; empty: the folder name. */
+  title: string;
+  cwd: string;
+  accountId: string | null;
+  launchArgs: string[];
+  /** Size on the canvas. */
+  w: number;
+  h: number;
+  createdAt: number;
+}
+
 /** Scrollback position of a node's terminal (tmux copy mode). */
 export interface ScrollState {
   /** Scrolled back (tmux copy mode). */
@@ -146,6 +162,7 @@ export interface AppSnapshot {
   nodes: NodeView[];
   edges: Edge[];
   annotations: Annotation[];
+  templates: NodeTemplate[];
   usage: AccountUsage[];
   viewport: Viewport | null;
   env: Environment;

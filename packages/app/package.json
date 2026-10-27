@@ -1,7 +1,7 @@
 {
   "name": "@flowdeck/app",
   "productName": "FlowDeck",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Desktop canvas to orchestrate Claude Code sessions across accounts",
   "author": "Danilo Herrera Alves <danilo.alves@ezycollect.com.au>",
@@ -19,6 +19,7 @@
     "dist:mac": "electron-vite build && electron-builder --mac dmg --publish never"
   },
   "dependencies": {
+    "@xterm/addon-web-links": "^0.12.0",
     "better-sqlite3": "^13.0.3",
     "node-pty": "^1.1.0"
   },

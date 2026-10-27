@@ -9,11 +9,15 @@ import type {
   EdgeDirection,
   Environment,
   Message,
+  NodeTemplate,
   NodeView,
   Viewport,
 } from '@flowdeck/shared';
 
-export type Panel = 'none' | 'accounts' | 'messages' | 'terminals';
+export type Panel = 'none' | 'accounts' | 'messages' | 'terminals' | 'launch';
+
+/** What the template editor opens with: a saved template (with its id) or settings to start from. */
+export type TemplateDraft = Partial<Omit<NodeTemplate, 'createdAt'>>;
 
 /** What the "New node" dialog opens with. */
 export interface DialogState {
@@ -38,6 +42,9 @@ interface State {
   selected: Record<string, boolean>;
   edges: Edge[];
   annotations: Record<string, Annotation>;
+  /** Node templates, by name. */
+  templates: NodeTemplate[];
+  templateDialog: TemplateDraft | null;
   drawMode: DrawMode;
   /** Group or text whose title/content is being edited. */
   editingAnnotation: string | null;
@@ -65,6 +72,10 @@ interface State {
   /** Local changes from the canvas (not yet persisted). */
   patchAnnotation(id: string, patch: Partial<Omit<Annotation, 'id' | 'kind'>>): void;
   removeAnnotation(id: string): void;
+  upsertTemplate(t: NodeTemplate): void;
+  removeTemplate(id: string): void;
+  openTemplateDialog(d: TemplateDraft): void;
+  closeTemplateDialog(): void;
   setDrawMode(mode: DrawMode): void;
   setEditingAnnotation(id: string | null): void;
   addEdge(e: Edge): void;
@@ -92,6 +103,8 @@ export const useStore = create<State>((set) => ({
   selected: {},
   edges: [],
   annotations: {},
+  templates: [],
+  templateDialog: null,
   drawMode: null,
   editingAnnotation: null,
   accounts: [],
@@ -112,6 +125,7 @@ export const useStore = create<State>((set) => ({
       order: s.nodes.map((n) => n.id),
       edges: s.edges,
       annotations: Object.fromEntries(s.annotations.map((a) => [a.id, a])),
+      templates: s.templates,
       accounts: s.accounts,
       usage: Object.fromEntries(s.usage.map((u) => [u.accountId, u])),
       env: s.env,
@@ -161,6 +175,15 @@ export const useStore = create<State>((set) => ({
       const { [id]: _sel, ...selected } = st.selected;
       return { annotations, selected, editingAnnotation: st.editingAnnotation === id ? null : st.editingAnnotation };
     }),
+  upsertTemplate: (t) =>
+    set((st) => ({
+      templates: [...st.templates.filter((x) => x.id !== t.id), t].sort(
+        (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.createdAt - b.createdAt,
+      ),
+    })),
+  removeTemplate: (id) => set((st) => ({ templates: st.templates.filter((t) => t.id !== id) })),
+  openTemplateDialog: (templateDialog) => set({ templateDialog }),
+  closeTemplateDialog: () => set({ templateDialog: null }),
   setDrawMode: (drawMode) => set({ drawMode }),
   setEditingAnnotation: (editingAnnotation) => set({ editingAnnotation }),
   addEdge: (e) => set((st) => ({ edges: [...st.edges.filter((x) => x.id !== e.id), e] })),

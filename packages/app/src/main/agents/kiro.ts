@@ -91,11 +91,16 @@ export const kiroAdapter: AgentAdapter = {
     return true; // an agent FlowDeck cannot find or read: assume the worst
   },
 
+  // `chat [INPUT]` has no subcommands.
+  taskError: () => null,
+
   launch(ctx) {
     // `--resume` takes the most recent conversation of the directory: only when unambiguous.
     const resume = !ctx.firstLaunch && !sharesWorkspace(ctx.node, ctx.others) ? ['--resume'] : [];
+    // A first task goes after `--`, so a leading dash or an option value cannot take it.
+    const task = ctx.task && ctx.firstLaunch ? ['--', ctx.task] : [];
     return {
-      command: [ctx.bin, 'chat', ...resume, ...ctx.node.launchArgs],
+      command: [ctx.bin, 'chat', ...resume, ...ctx.node.launchArgs, ...task],
       env: {},
       files: [],
       // Becomes idle after its start-up output settles (activity status).

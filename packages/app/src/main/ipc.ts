@@ -1,7 +1,9 @@
 import { dialog, ipcMain, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron';
 import {
   clipboardWriteSchema,
+  INVOKE_CHANNELS,
   idSchema,
+  linkOpenSchema,
   ptyInputSchema,
   ptyOpenSchema,
   ptyPasteSchema,
@@ -13,8 +15,9 @@ import {
   type Result,
 } from '@flowdeck/shared';
 import { z, ZodError } from 'zod';
-import { preparePaste, type ClipboardLike } from './clipboard';
+import { copiedText, preparePaste, type ClipboardLike } from './clipboard';
 import type { Core } from './core';
+import { webUrl, type LinkOpener } from './links';
 import type { PtyBridge } from './pty/bridge';
 
 export interface IpcDeps {
@@ -24,6 +27,7 @@ export interface IpcDeps {
   isTrustedUrl: (url: string) => boolean;
   autostart: { get(): boolean; set(enabled: boolean): boolean };
   clipboard: ClipboardLike;
+  links: LinkOpener;
 }
 
 type Handler<C extends InvokeChannel> = (
@@ -56,44 +60,52 @@ export function registerIpc(deps: IpcDeps): void {
     });
   }
 
-  handle('app:snapshot', () => {
-    const snapshot = core.snapshot();
-    return { ...snapshot, env: { ...snapshot.env, autostart: deps.autostart.get() } };
-  });
-  handle('node:create', (input) => core.createNode(input));
-  handle('node:update', (id, patch) => core.updateNode(idSchema.parse(id), patch));
-  handle('node:delete', async (id) => {
-    const nodeId = idSchema.parse(id);
-    pty.close(nodeId);
-    await core.deleteNode(nodeId);
-  });
-  handle('node:restart', async (id) => {
-    const nodeId = idSchema.parse(id);
-    pty.close(nodeId);
-    return core.restartNode(nodeId);
-  });
-  handle('node:duplicate', (id) => core.duplicateNode(idSchema.parse(id)));
-  handle('edge:create', (input) => core.createEdge(input));
-  handle('edge:delete', (id) => core.deleteEdge(idSchema.parse(id)));
-  handle('annotation:create', (input) => core.createAnnotation(input));
-  handle('annotation:update', (id, patch) => core.updateAnnotation(idSchema.parse(id), patch));
-  handle('annotation:delete', (id) => core.deleteAnnotation(idSchema.parse(id)));
-  handle('account:discover', () => core.discoverAccounts());
-  handle('account:upsert', (input) => core.upsertAccount(input));
-  handle('account:delete', (id) => core.deleteAccount(idSchema.parse(id)));
-  handle('messages:list', () => core.listMessages());
-  handle('viewport:save', (v) => core.saveViewport(viewportSchema.parse(v)));
-  handle('dialog:pickDirectory', async () => {
-    const win = deps.window();
-    if (!win) return null;
-    const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] });
-    return r.canceled ? null : (r.filePaths[0] ?? null);
-  });
-  handle('pty:scrollState', async (id) => {
-    const node = core.opts.repo.getNode(idSchema.parse(id));
-    return node ? core.opts.tmux.scrollState(node.tmuxSession) : null;
-  });
-  handle('autostart:set', (enabled) => deps.autostart.set(z.boolean().parse(enabled)));
+  // One entry per channel: a channel the preload allows without a handler is a type error.
+  const handlers: { [C in InvokeChannel]: Handler<C> } = {
+    'app:snapshot': () => {
+      const snapshot = core.snapshot();
+      return { ...snapshot, env: { ...snapshot.env, autostart: deps.autostart.get() } };
+    },
+    'node:create': (input) => core.createNode(input),
+    'node:update': (id, patch) => core.updateNode(idSchema.parse(id), patch),
+    'node:delete': async (id) => {
+      const nodeId = idSchema.parse(id);
+      pty.close(nodeId);
+      await core.deleteNode(nodeId);
+    },
+    'node:restart': async (id) => {
+      const nodeId = idSchema.parse(id);
+      pty.close(nodeId);
+      return core.restartNode(nodeId);
+    },
+    'node:duplicate': (id) => core.duplicateNode(idSchema.parse(id)),
+    'edge:create': (input) => core.createEdge(input),
+    'edge:delete': (id) => core.deleteEdge(idSchema.parse(id)),
+    'annotation:create': (input) => core.createAnnotation(input),
+    'annotation:update': (id, patch) => core.updateAnnotation(idSchema.parse(id), patch),
+    'annotation:delete': (id) => core.deleteAnnotation(idSchema.parse(id)),
+    'template:create': (input) => core.saveTemplate(null, input),
+    'template:update': (id, input) => core.saveTemplate(idSchema.parse(id), input),
+    'template:delete': (id) => core.deleteTemplate(idSchema.parse(id)),
+    'account:discover': () => core.discoverAccounts(),
+    'account:upsert': (input) => core.upsertAccount(input),
+    'account:delete': (id) => core.deleteAccount(idSchema.parse(id)),
+    'messages:list': () => core.listMessages(),
+    'viewport:save': (v) => core.saveViewport(viewportSchema.parse(v)),
+    'dialog:pickDirectory': async () => {
+      const win = deps.window();
+      if (!win) return null;
+      const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] });
+      return r.canceled ? null : (r.filePaths[0] ?? null);
+    },
+    'pty:scrollState': async (id) => {
+      const node = core.opts.repo.getNode(idSchema.parse(id));
+      return node ? core.opts.tmux.scrollState(node.tmuxSession) : null;
+    },
+    'autostart:set': (enabled) => deps.autostart.set(z.boolean().parse(enabled)),
+  };
+  const register = <C extends InvokeChannel>(channel: C) => handle(channel, handlers[channel]);
+  for (const channel of INVOKE_CHANNELS) register(channel);
 
   function on<T>(channel: string, schema: z.ZodType<T>, fn: (payload: T) => void | Promise<void>): void {
     ipcMain.on(channel, (event, payload: unknown) => {
@@ -138,9 +150,16 @@ export function registerIpc(deps: IpcDeps): void {
     const text = await deps.clipboard.readText(source);
     if (text) pty.write(nodeId, preparePaste(text, bracketed));
   });
-  on('clipboard:write', clipboardWriteSchema, async ({ text }) => {
+  on('clipboard:write', clipboardWriteSchema, async ({ text: raw }) => {
+    const text = copiedText(raw);
+    if (!text) return;
     await deps.clipboard.writeText(text, 'selection');
     await deps.clipboard.writeText(text, 'clipboard');
+  });
+  // Ctrl+click on a link in a terminal: only web links leave FlowDeck, to the user's browser.
+  on('link:open', linkOpenSchema, async ({ url }) => {
+    const safe = webUrl(url);
+    if (safe) await deps.links.open(safe);
   });
   on('node:focus', z.object({ nodeId: idSchema.nullable() }), ({ nodeId }) => core.setFocus(nodeId));
 }

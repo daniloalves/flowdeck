@@ -25,6 +25,8 @@ type FlowNode = TerminalFlowNode | GroupFlowNode | TextFlowNode;
 
 /** Groups stay below terminals and edges, also when selected (selection adds 1000). */
 const GROUP_Z = -2000;
+/** Texts stay in front of terminals and edges, also selected ones (edges can be lifted to 2000). */
+const TEXT_Z = 3000;
 
 /** Items that move with a group being dragged: their start positions. */
 type GroupDrag = { start: { x: number; y: number }; members: Map<string, { x: number; y: number }> };
@@ -94,6 +96,7 @@ export function Canvas() {
         width: a.w,
         ...(textSizes[a.id] ? { measured: textSizes[a.id] } : {}),
         data: { annotationId: a.id },
+        zIndex: TEXT_Z,
         selected: selected[a.id] ?? false,
       }));
     return [...groups, ...terminals, ...texts];

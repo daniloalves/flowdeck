@@ -18,6 +18,7 @@ import {
   newNodeSchema,
   nodePatchSchema,
   sendToSchema,
+  templateInputSchema,
   type Account,
   type AccountUsage,
   type Annotation,
@@ -31,7 +32,9 @@ import {
   type InboxMessage,
   type Message,
   type NodeState,
+  type NodeKind,
   type NodeStatus,
+  type NodeTemplate,
   type NodeView,
   type PeerInfo,
   type SendResult,
@@ -140,6 +143,7 @@ export class Core {
       nodes: this.repo.listNodes().map((n) => this.view(n)),
       edges: this.repo.listEdges(),
       annotations: this.repo.listAnnotations(),
+      templates: this.repo.listTemplates(),
       usage: [...this.usage.values()],
       viewport: this.repo.getViewport(),
       env: {
@@ -206,29 +210,46 @@ export class Core {
 
   /* ------------------------------------------------------------------ nodes */
 
+  /**
+   * Checks what a node (or a template) would launch: an existing directory, an account of the
+   * right agent, no FlowDeck-managed arguments. Returns the resolved directory and account id.
+   */
+  private checkLaunchConfig(c: { kind: NodeKind; cwd: string; accountId: string | null; launchArgs: string[] }): {
+    cwd: string;
+    accountId: string | null;
+  } {
+    const cwd = resolve(c.cwd);
+    if (!existsSync(cwd) || !statSync(cwd).isDirectory()) throw new Error(`directory not found: ${cwd}`);
+    if (!isAgentKind(c.kind)) {
+      if (c.launchArgs.length > 0) throw new Error('shell nodes do not take launch arguments');
+      return { cwd, accountId: null };
+    }
+    const adapter = AGENTS[c.kind];
+    const label = AGENT_LABEL[c.kind];
+    let accountId: string | null = null;
+    if (adapter.accounts) {
+      if (!c.accountId) throw new Error(`choose an account for a ${label} node`);
+      const account = this.repo.getAccount(c.accountId);
+      if (!account) throw new Error(`unknown account: ${c.accountId}`);
+      if (account.agent !== adapter.accounts.agent) throw new Error(`"${account.label}" is not a ${label} account`);
+      accountId = account.id;
+    }
+    const reserved = adapter.reservedArgs(c.launchArgs);
+    if (reserved) throw new Error(`${reserved} is managed by FlowDeck`);
+    return { cwd, accountId };
+  }
+
   async createNode(raw: unknown): Promise<NodeView> {
     const input = newNodeSchema.parse(raw);
-    const cwd = resolve(input.cwd);
-    if (!existsSync(cwd) || !statSync(cwd).isDirectory()) throw new Error(`directory not found: ${cwd}`);
+    const { cwd, accountId } = this.checkLaunchConfig(input);
     if (this.tmuxVersion === null) throw new Error('tmux is not installed');
-
-    let accountId: string | null = null;
     if (isAgentKind(input.kind)) {
       const adapter = AGENTS[input.kind];
-      const label = AGENT_LABEL[input.kind];
-      if (!this.opts.agentBins[input.kind]) throw new Error(`the ${label} CLI (${adapter.bin}) was not found in PATH`);
-      if (adapter.accounts) {
-        if (!input.accountId) throw new Error(`choose an account for a ${label} node`);
-        const account = this.repo.getAccount(input.accountId);
-        if (!account) throw new Error(`unknown account: ${input.accountId}`);
-        if (account.agent !== adapter.accounts.agent) throw new Error(`"${account.label}" is not a ${label} account`);
-        accountId = account.id;
-      }
-      const reserved = adapter.reservedArgs(input.launchArgs);
-      if (reserved) throw new Error(`${reserved} is managed by FlowDeck`);
-    } else if (input.launchArgs.length > 0) {
-      throw new Error('shell nodes do not take launch arguments');
+      if (!this.opts.agentBins[input.kind]) throw new Error(`the ${AGENT_LABEL[input.kind]} CLI (${adapter.bin}) was not found in PATH`);
     }
+    const task = input.task?.trim() || undefined;
+    const taskError = task && isAgentKind(input.kind) ? AGENTS[input.kind].taskError(task) : null;
+    if (taskError) throw new Error(taskError);
 
     const id = randomUUID();
     const count = this.repo.listNodes().length;
@@ -249,10 +270,17 @@ export class Core {
     };
     this.repo.insertNode(node, { state: 'starting', detail: null, updatedAt: Date.now() });
     try {
-      await this.launch(node, true);
+      await this.launch(node, true, task);
     } catch (err) {
       this.repo.deleteNode(id);
       throw err;
+    }
+    // A shell has no first-prompt argument: its task is typed ahead (the terminal keeps it until
+    // the shell reads it). The node exists either way.
+    if (task && !isAgentKind(node.kind)) {
+      await this.opts.tmux
+        .pasteAndSubmit(node.tmuxSession, task)
+        .catch((err: unknown) => this.setState(id, 'idle', `task not sent: ${err instanceof Error ? err.message : String(err)}`));
     }
     return this.view(this.mustNode(id));
   }
@@ -313,16 +341,16 @@ export class Core {
   }
 
   /** Creates the tmux session for a node. Never goes through a shell. */
-  private async launch(node: NodeWithToken, firstLaunch = false): Promise<void> {
+  private async launch(node: NodeWithToken, firstLaunch = false, task?: string): Promise<void> {
     this.launching.add(node.id);
     try {
-      await this.launchSession(node, firstLaunch);
+      await this.launchSession(node, firstLaunch, task);
     } finally {
       this.launching.delete(node.id);
     }
   }
 
-  private async launchSession(node: NodeWithToken, firstLaunch: boolean): Promise<void> {
+  private async launchSession(node: NodeWithToken, firstLaunch: boolean, task?: string): Promise<void> {
     const { paths } = this.opts;
     let command: string[];
     let env: Record<string, string> = {};
@@ -359,6 +387,7 @@ export class Core {
         nodeDir,
         identityFile,
         newId: () => randomUUID(),
+        ...(task ? { task } : {}),
       });
       for (const f of plan.files) writePrivateFile(f.path, f.content);
       if (plan.sessionId !== undefined && plan.sessionId !== node.sessionId) this.repo.setSessionId(node.id, plan.sessionId);
@@ -555,6 +584,32 @@ export class Core {
 
   deleteAnnotation(id: string): void {
     this.repo.deleteAnnotation(id);
+  }
+
+  /* ------------------------------------------------------------------ node templates */
+
+  /** Saves a template after the same checks as a new node (the CLI may be installed later). */
+  saveTemplate(id: string | null, raw: unknown): NodeTemplate {
+    const input = templateInputSchema.parse(raw);
+    const existing = id ? this.repo.getTemplate(id) : null;
+    if (id && !existing) throw new Error('template not found');
+    if (!existing && this.repo.countTemplates() >= LIMITS.templates) {
+      throw new Error(`there are already ${LIMITS.templates} templates`);
+    }
+    const { cwd, accountId } = this.checkLaunchConfig(input);
+    const template: NodeTemplate = {
+      ...input,
+      id: existing?.id ?? randomUUID(),
+      cwd,
+      accountId,
+      createdAt: existing?.createdAt ?? Date.now(),
+    };
+    this.repo.saveTemplate(template);
+    return this.repo.getTemplate(template.id)!;
+  }
+
+  deleteTemplate(id: string): void {
+    this.repo.deleteTemplate(id);
   }
 
   /* ------------------------------------------------------------------ agent API */

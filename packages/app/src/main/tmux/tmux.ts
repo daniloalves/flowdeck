@@ -48,6 +48,12 @@ export function assertSessionName(name: string): void {
 }
 
 /** Pure argv builder for `new-session`; exported for tests. */
+/**
+ * tmux sends a command to its server in one message of at most 16 KiB (a 16 319-byte argument
+ * still fits, measured with tmux 3.4); keep a margin for its framing.
+ */
+export const TMUX_COMMAND_BYTES = 16_000;
+
 export function buildNewSessionArgs(spec: SessionSpec): string[] {
   assertSessionName(spec.name);
   if (spec.command.length === 0) throw new Error('empty command');
@@ -62,6 +68,10 @@ export function buildNewSessionArgs(spec: SessionSpec): string[] {
   // A single-element command would be passed to `sh -c`, so pad it with an `exec` wrapper.
   const command = spec.command.length === 1 ? ['/usr/bin/env', spec.command[0]!] : spec.command;
   args.push('--', ...command);
+  const size = args.reduce((n, a) => n + Buffer.byteLength(a) + 1, 0);
+  if (size > TMUX_COMMAND_BYTES) {
+    throw new Error(`the command is too long for tmux (${size} bytes, at most ${TMUX_COMMAND_BYTES}): shorten the task or the extra arguments`);
+  }
   return args;
 }
 

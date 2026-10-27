@@ -33,6 +33,12 @@ export function memoryClipboard(): ClipboardLike & { contents: Record<ClipboardS
   };
 }
 
+/**
+ * Text copied from a terminal, without the line break a drag past the end of the last line adds
+ * (tmux's vi selection): pasting it then never runs a command by itself.
+ */
+export const copiedText = (text: string): string => text.replace(/\r?\n$/, '');
+
 const BRACKET_START = '\x1b[200~';
 const BRACKET_END = '\x1b[201~';
 

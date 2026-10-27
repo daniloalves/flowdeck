@@ -374,8 +374,25 @@ describe('Core with real tmux and the hook pipeline', () => {
     await h.tmux.reloadConfig();
     await h.tmux.reloadConfig();
     const features = (await h.tmux.run(['show', '-s', 'terminal-features'])).stdout.trim().split('\n');
-    expect(features.filter((f) => f.includes('xterm-256color'))).toEqual(['terminal-features[10] xterm-256color:RGB:clipboard']);
+    expect(features.filter((f) => f.includes('xterm-256color'))).toEqual(['terminal-features[10] xterm-256color:RGB:clipboard:hyperlinks']);
     expect((await h.tmux.run(['show', '-g', 'mode-style'])).stdout).toContain('#3d3d66');
+    await h.core.deleteNode(n.id);
+  });
+
+  it('a selection includes the character where it ends (vi copy-mode keys)', async () => {
+    const n = await h.core.createNode({ kind: 'shell', title: 'select', cwd: h.home, accountId: null });
+    const t = `=${n.tmuxSession}:`;
+    await h.tmux.run(['send-keys', '-t', t, "clear; echo 'abcdefghij'", 'Enter']);
+    await waitFor(async () => /^abcdefghij$/m.test(await h.tmux.capture(n.tmuxSession)) || null);
+    expect((await h.tmux.run(['show', '-gw', 'mode-keys'])).stdout.trim()).toBe('mode-keys vi');
+    const x = async (...cmd: string[]) => h.tmux.run(['send-keys', '-t', t, '-X', ...cmd]);
+    await h.tmux.run(['copy-mode', '-t', t]);
+    await x('top-line');
+    await x('start-of-line');
+    await x('begin-selection');
+    for (let i = 0; i < 9; i++) await x('cursor-right');
+    await x('copy-selection-and-cancel');
+    expect((await h.tmux.run(['show-buffer'])).stdout).toBe('abcdefghij');
     await h.core.deleteNode(n.id);
   });
 });

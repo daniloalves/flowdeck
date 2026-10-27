@@ -3,6 +3,7 @@ import type { ScrollState } from '@flowdeck/shared';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { call, send, subscribePty } from '../api';
+import { attachLinks } from './links';
 import { parseOsc52 } from './osc52';
 import { fixMouseScaling } from './scale';
 import { Scrollbar } from './Scrollbar';
@@ -25,7 +26,7 @@ interface Props {
 const NOT_TYPING = /^(?:(?:\x1b\[<\d+;\d+;\d+[Mm])+|\x1b\[M[\s\S]{3}|\x1b\[[IO])$/;
 
 /** FlowDeck's window shortcuts (see App.tsx) never reach the program in the terminal. */
-const isWindowShortcut = (e: KeyboardEvent): boolean => e.ctrlKey && e.shiftKey && /^[ndgx]$/i.test(e.key);
+const isWindowShortcut = (e: KeyboardEvent): boolean => e.ctrlKey && e.shiftKey && /^[ndgxl]$/i.test(e.key);
 
 /**
  * xterm.js view of one node. It is only a client: closing it detaches from tmux, the program
@@ -73,6 +74,7 @@ export function Terminal({ nodeId, generation, onDetached }: Props) {
     term.loadAddon(fit);
     term.open(el);
     fixMouseScaling(term);
+    const links = attachLinks(term, el, (url) => send('link:open', { url }));
     try {
       fit.fit();
     } catch {
@@ -187,6 +189,7 @@ export function Terminal({ nodeId, generation, onDetached }: Props) {
       el.removeEventListener('wheel', onWheel, { capture: true });
       for (const type of ['mousedown', 'mouseup', 'auxclick'] as const) el.removeEventListener(type, onMiddle, true);
       osc52.dispose();
+      links.dispose();
       selection.dispose();
       observer.disconnect();
       textarea?.removeEventListener('focus', onFocus);

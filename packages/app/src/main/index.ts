@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { app, BrowserWindow, clipboard, dialog, Notification, session } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, Notification, session, shell } from 'electron';
 import type { EventApi, EventChannel } from '@flowdeck/shared';
 import { autostartFile, isAutostartEnabled, setAutostart } from './autostart';
 import { memoryClipboard, systemClipboard, type ClipboardLike } from './clipboard';
@@ -9,6 +9,7 @@ import { Core } from './core';
 import { openDatabase, type Db } from './db/database';
 import { Repo } from './db/repo';
 import { registerIpc } from './ipc';
+import { memoryLinks, rateLimited, systemLinks, type LinkOpener } from './links';
 import { PtyBridge } from './pty/bridge';
 import { ensurePrivateDir, installRuntimeFiles, resolveRuntime } from './runtime';
 import { loginShellPath, mergePath, which } from './shellenv';
@@ -54,6 +55,14 @@ function appClipboard(): ClipboardLike {
   const memory = memoryClipboard();
   (globalThis as { __flowdeckClipboard?: typeof memory.contents }).__flowdeckClipboard = memory.contents;
   return memory;
+}
+
+/** The user's browser, or a recorder for E2E tests (exposed to Playwright on globalThis). */
+function appLinks(): LinkOpener {
+  if (!process.env.FLOWDECK_TEST_LINKS) return rateLimited(systemLinks(shell), 500);
+  const memory = memoryLinks();
+  (globalThis as { __flowdeckLinks?: string[] }).__flowdeckLinks = memory.opened;
+  return rateLimited(memory, 500);
 }
 
 async function bootstrap(): Promise<void> {
@@ -146,6 +155,7 @@ async function bootstrap(): Promise<void> {
     core,
     pty: ptyBridge,
     clipboard: appClipboard(),
+    links: appLinks(),
     window: () => mainWindow,
     isTrustedUrl,
     autostart,

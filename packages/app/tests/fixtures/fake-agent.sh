@@ -8,6 +8,7 @@
 #           real Codex, SessionStart and the session id only appear with the first prompt.
 #   kiro    honours `chat [--resume]`; no hooks at all; prints output while "working".
 #
+# A first prompt can follow `--` on the command line (like the real CLIs); it runs before stdin.
 # Prompts (one per line on stdin):
 #   PERMISSION ...  -> permission event (Notification / PermissionRequest); next line approves
 #   SLOW ...        -> stays busy for 3 s
@@ -20,12 +21,16 @@ set -u
 personality="$(basename "$0" .sh)"
 personality="${personality#fake-}"
 args=("$@")
-settings="" session="" mode="new"
+settings="" session="" mode="new" first_prompt=""
+for ((i = 0; i < ${#args[@]}; i++)); do
+  if [ "${args[i]}" = "--" ]; then first_prompt="${args[i + 1]:-}"; break; fi
+done
 
 case "$personality" in
   claude)
     while [ $# -gt 0 ]; do
       case "$1" in
+        --) break ;;
         --settings) settings="$2"; shift 2 ;;
         --mcp-config) shift 2 ;;
         --session-id) session="$2"; mode="new"; shift 2 ;;
@@ -111,9 +116,8 @@ busy() { # busy <seconds>: kiro prints while working so the activity monitor see
   fi
 }
 
-while IFS= read -r line; do
-  [ -z "$line" ] && continue
-  [ "$line" = "exit" ] && exit 0
+prompt() { # prompt <text>
+  local line="$1"
   [ "$personality" = "codex" ] && session_start
   echo "> $line"
   printf '%s\n' "$line" >>"$(transcript_for "$session").prompts"
@@ -139,4 +143,11 @@ while IFS= read -r line; do
     INTERRUPT*) fire Interrupt "{\"session_id\":\"$session\",\"hook_event_name\":\"Interrupt\"}" ;;
     *) fire Stop "{\"session_id\":\"$session\",\"hook_event_name\":\"Stop\"}" ;;
   esac
+}
+
+[ -n "$first_prompt" ] && prompt "$first_prompt"
+while IFS= read -r line; do
+  [ -z "$line" ] && continue
+  [ "$line" = "exit" ] && exit 0
+  prompt "$line"
 done

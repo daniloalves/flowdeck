@@ -20,6 +20,8 @@ export interface LaunchContext {
   /** Per-node identity file for flowdeck-mcp (written by Core before launch). */
   identityFile: string;
   newId: () => string;
+  /** First task of a launched node, given to the CLI as its first prompt (first launch only). */
+  task?: string;
 }
 
 export interface LaunchPlan {
@@ -50,6 +52,8 @@ export interface AgentAdapter {
   reservedArgs(args: readonly string[]): string | null;
   /** Does the node run without approval prompts (flags, or settings files it would read)? */
   skipsApprovals(args: readonly string[], ctx: { configDir: string | null; cwd: string; home: string }): boolean;
+  /** Why the CLI would not read this task as its first prompt, or null. */
+  taskError(task: string): string | null;
   launch(ctx: LaunchContext): LaunchPlan;
 }
 

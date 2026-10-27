@@ -102,3 +102,47 @@ our controlled nodes; now `fitBounds`), and controlled nodes lacked their measur
 settings are re-applied to an already running FlowDeck tmux server on start, so existing sessions
 get the new scrollback and clipboard behaviour without a restart.
 
+
+# 0.4.0 — canvas texts always stay in front
+
+State on 2026-10-26. Understanding, design, architecture and plan: `docs/IMPROVEMENT-TEXTS-ON-TOP.md`.
+
+| Suite | Result |
+|---|---|
+| Typecheck | clean |
+| Shared + MCP stdio | 10 / 10 |
+| App unit + integration | 124 / 124 (2 opt-in real-agent tests skipped) |
+| E2E (Playwright): previous 19 + a text over a terminal stays topmost while the terminal is selected and focused, and can still be edited | 20 / 20 |
+| Snyk Code | no finding in the changed code; the known items above are unchanged |
+
+The new E2E test failed before the fix (the selected terminal covered the text) and passes after it.
+
+# 0.4.0 — node templates and the task launcher
+
+State on 2026-10-26. Understanding, spike, design, architecture and plan: `docs/FEATURE-TASK-LAUNCHER.md`.
+
+| Suite | Result |
+|---|---|
+| Typecheck | clean |
+| Shared + MCP stdio | 10 / 10 |
+| App unit (+ task schema and byte limit, adapter argv with a task, Claude one-word rule, tmux command size, migration v3→v4, templates CRUD) | all passing |
+| App integration (+ template checks; Claude/Codex/Kiro/Shell launched with a task; 12 KiB multi-byte task intact through tmux; no resend on restart; refused launches leave nothing behind) | all passing |
+| App unit + integration total | 137 / 137 (2 opt-in real-agent tests skipped) |
+| E2E (Playwright): previous 20 + Save as template, Ctrl+Shift+L launch with a task, unique titles, 12 KB limit in the UI, refused task, edit and delete templates | 24 / 24 |
+| Snyk Code | no finding in the new or changed code; the 33 results are the known items listed above (25 of them in bundled third-party code under `release/`) |
+| Spike with the real Claude Code and Codex CLIs | first prompt after `--` survives the trust dialog and the hook review; `claude -- mcp` runs a subcommand, so one-word Claude tasks are refused |
+
+# 0.4.0 — the last selected character, and Ctrl+click on links
+
+State on 2026-10-27. Understanding, design, architecture and plan: `docs/IMPROVEMENT-SELECTION-AND-LINKS.md`.
+
+| Suite | Result |
+|---|---|
+| Typecheck | clean |
+| Shared + MCP stdio | 10 / 10 |
+| App unit + integration (+ `copiedText`, `webUrl` and the rate limit; vi selection on real tmux; `hyperlinks` feature after reload) | 141 / 141 (2 opt-in real-agent tests skipped) |
+| E2E (Playwright): previous 24 + a drag copies the last character (left to right and right to left, at 100 % and 80 %), Ctrl+click opens a web link and a plain click does not, OSC 8 link opens its target and `file:` does not, a wrapped URL opens whole | 29 / 29 |
+| Snyk Code | no finding in the new or changed code (only the known Unix-socket item) |
+| New dependency `@xterm/addon-web-links@0.12.0` | Snyk package health "Healthy", no known vulnerabilities; `pnpm audit`: 0 vulnerabilities |
+
+The new selection test failed before the fix (`abcdefghi` instead of `abcdefghij`).

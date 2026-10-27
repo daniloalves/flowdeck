@@ -37,6 +37,13 @@ describe('tmux argv', () => {
     expect(args.slice(-2)).toEqual(['/usr/bin/env', '/bin/bash']);
   });
 
+  it('refuses a command tmux could not carry (one 16 KiB message), naming the cause', () => {
+    const spec = (task: string) => ({ name: 'fd-abcdef123456', cwd: '/', env: { A: 'x'.repeat(500) }, command: ['claude', '--', task] });
+    // a 12 KiB task of 4-byte characters, plus the rest of the command, still fits
+    expect(() => buildNewSessionArgs(spec('😀'.repeat(3072)))).not.toThrow();
+    expect(() => buildNewSessionArgs(spec('x'.repeat(16_000)))).toThrow(/too long for tmux.*shorten the task/);
+  });
+
   it('rejects unsafe session names and env keys', () => {
     expect(() => assertSessionName('fd-x;kill')).toThrow();
     expect(() => assertSessionName('other')).toThrow();

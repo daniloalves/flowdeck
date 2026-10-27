@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
-import { AGENT_LABEL, SKIP_APPROVALS_FLAG, isAgentKind, type NodeKind } from '@flowdeck/shared';
+import { AGENT_LABEL, type NodeKind } from '@flowdeck/shared';
 import { call } from '../api';
 import { useStore, type DialogState } from '../store/store';
+import { DEFAULT_NODE_SIZE, KindField, LaunchFields, accountAgentOf, isAvailable, pickAccount, toLaunchArgs } from './nodeFields';
 
-const KINDS: NodeKind[] = ['claude', 'codex', 'kiro', 'shell'];
 const PREFS_KEY = 'flowdeck.newNode';
-const SIZE = { w: 720, h: 440 };
 const GAP = 40;
 
 interface Prefs {
@@ -33,22 +32,16 @@ function savePrefs(p: Prefs): void {
   }
 }
 
-const HINT: Partial<Record<NodeKind, string>> = {
-  codex:
-    "The first Codex launch per account asks you to review FlowDeck's hooks: choose “Trust all and continue” (or run /hooks and press t) once, so status and messages work.",
-  kiro: 'Kiro status comes from terminal activity (no “needs you” state). Kiro can receive messages but not send them yet.',
-};
-
 export function NewNodeDialog({ initial, onClose }: { initial: DialogState; onClose: () => void }) {
   const accounts = useStore((s) => s.accounts);
   const env = useStore((s) => s.env);
   const upsertNode = useStore((s) => s.upsertNode);
   const toast = useStore((s) => s.toast);
+  const openTemplateDialog = useStore((s) => s.openTemplateDialog);
   const flow = useReactFlow();
   const [prefs] = useState(loadPrefs);
 
-  const available = (k: NodeKind) => !isAgentKind(k) || Boolean(env?.agents[k]);
-  const firstKind = initial.kind ?? (prefs.kind && available(prefs.kind) ? prefs.kind : 'claude');
+  const firstKind = initial.kind ?? (prefs.kind && isAvailable(prefs.kind, env?.agents) ? prefs.kind : 'claude');
   const [kind, setKind] = useState<NodeKind>(firstKind);
   const [title, setTitle] = useState(initial.title ?? '');
   const [cwd, setCwd] = useState(prefs.cwd ?? env?.home ?? '');
@@ -73,24 +66,18 @@ export function NewNodeDialog({ initial, onClose }: { initial: DialogState; onCl
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
-  const accountAgent = kind === 'claude' || kind === 'codex' ? kind : null;
-  const kindAccounts = accounts.filter((a) => a.agent === accountAgent);
-  const accountId = accountAgent ? (chosen[kind] && kindAccounts.some((a) => a.id === chosen[kind]) ? chosen[kind]! : (kindAccounts[0]?.id ?? '')) : '';
-
-  const browse = async () => {
-    const dir = await call('dialog:pickDirectory').catch(() => null);
-    if (dir) setCwd(dir);
-  };
+  const accountAgent = accountAgentOf(kind);
+  const accountId = pickAccount(kind, accounts, chosen[kind]);
+  const config = { kind, cwd, accountId, extra: extra[kind] ?? '', skip };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
-      const launchArgs = isAgentKind(kind)
-        ? [...(extra[kind] ?? '').split(/\s+/).filter(Boolean), ...(skip ? [SKIP_APPROVALS_FLAG[kind]] : [])]
-        : [];
+      const launchArgs = toLaunchArgs(config);
       const baseTitle = title.trim() || cwd.split('/').filter(Boolean).pop() || AGENT_LABEL[kind];
       const center = flow.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+      const size = DEFAULT_NODE_SIZE;
       const cols = Math.min(count, 3);
       const created = [];
       for (let i = 0; i < count; i++) {
@@ -101,9 +88,9 @@ export function NewNodeDialog({ initial, onClose }: { initial: DialogState; onCl
           accountId: accountAgent ? accountId || null : null,
           launchArgs,
           layout: {
-            x: center.x - (cols * (SIZE.w + GAP)) / 2 + (i % cols) * (SIZE.w + GAP),
-            y: center.y - SIZE.h / 2 + Math.floor(i / cols) * (SIZE.h + GAP),
-            ...SIZE,
+            x: center.x - (cols * (size.w + GAP)) / 2 + (i % cols) * (size.w + GAP),
+            y: center.y - size.h / 2 + Math.floor(i / cols) * (size.h + GAP),
+            ...size,
           },
         });
         upsertNode(node);
@@ -119,32 +106,25 @@ export function NewNodeDialog({ initial, onClose }: { initial: DialogState; onCl
     }
   };
 
+  /** Opens the template editor with these settings; this dialog closes. */
+  const saveAsTemplate = () => {
+    onClose();
+    openTemplateDialog({
+      name: title.trim() || cwd.split('/').filter(Boolean).pop() || AGENT_LABEL[kind],
+      kind,
+      title: title.trim(),
+      cwd: cwd.trim(),
+      accountId: accountAgent ? accountId || null : null,
+      launchArgs: toLaunchArgs(config),
+      ...DEFAULT_NODE_SIZE,
+    });
+  };
+
   return (
     <div className="fd-modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <form
-        className="fd-modal"
-        onSubmit={(e) => void submit(e)}
-        data-testid="new-node-dialog"
-      >
+      <form className="fd-modal" onSubmit={(e) => void submit(e)} data-testid="new-node-dialog">
         <h2>New node</h2>
-        <div className="fd-segmented" role="radiogroup" aria-label="Type">
-          {KINDS.map((k) => (
-            <button
-              key={k}
-              type="button"
-              role="radio"
-              aria-checked={kind === k}
-              className={kind === k ? 'active' : ''}
-              disabled={!available(k)}
-              title={available(k) ? AGENT_LABEL[k] : `${AGENT_LABEL[k]} CLI not found in PATH`}
-              onClick={() => setKind(k)}
-              data-testid={`kind-${k}`}
-            >
-              {AGENT_LABEL[k]}
-            </button>
-          ))}
-        </div>
-        {HINT[kind] && <p className="fd-hint">{HINT[kind]}</p>}
+        <KindField kind={kind} onChange={setKind} />
         <label>
           Title
           <input
@@ -156,47 +136,15 @@ export function NewNodeDialog({ initial, onClose }: { initial: DialogState; onCl
             autoFocus
           />
         </label>
-        <label>
-          Working directory
-          <span className="fd-row">
-            <input value={cwd} onChange={(e) => setCwd(e.target.value)} placeholder="/home/you/project" required name="cwd" />
-            <button type="button" className="fd-btn" onClick={() => void browse()}>
-              Browse…
-            </button>
-          </span>
-        </label>
-        {accountAgent && (
-          <label>
-            Account
-            <select value={accountId} onChange={(e) => setChosen({ ...chosen, [kind]: e.target.value })} name="account" required>
-              <option value="" disabled>
-                {kindAccounts.length ? 'Choose an account' : `Register a ${AGENT_LABEL[kind]} account first (Accounts)`}
-              </option>
-              {kindAccounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label} — {a.configDir}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {isAgentKind(kind) && (
-          <>
-            <label>
-              Extra {AGENT_LABEL[kind]} arguments
-              <input
-                value={extra[kind] ?? ''}
-                onChange={(e) => setExtra({ ...extra, [kind]: e.target.value })}
-                placeholder={kind === 'codex' ? '-m <model>' : '--model <name>'}
-                name="args"
-              />
-            </label>
-            <label className="fd-check">
-              <input type="checkbox" checked={skip} onChange={(e) => setSkip(e.target.checked)} />
-              Skip approval prompts ({SKIP_APPROVALS_FLAG[kind]}) — red ring; only other such nodes can send to it
-            </label>
-          </>
-        )}
+        <LaunchFields
+          value={config}
+          onChange={(patch) => {
+            if (patch.cwd !== undefined) setCwd(patch.cwd);
+            if (patch.accountId !== undefined) setChosen({ ...chosen, [kind]: patch.accountId });
+            if (patch.extra !== undefined) setExtra({ ...extra, [kind]: patch.extra });
+            if (patch.skip !== undefined) setSkip(patch.skip);
+          }}
+        />
         <label className="fd-inline-field">
           How many
           <input
@@ -212,6 +160,9 @@ export function NewNodeDialog({ initial, onClose }: { initial: DialogState; onCl
           <span className="fd-muted fd-kbd-hint">
             <kbd>Ctrl+Shift+N</kbd> opens this dialog
           </span>
+          <button type="button" className="fd-btn" onClick={saveAsTemplate} title="Save these settings as a template for the Launch panel" data-testid="save-as-template">
+            Save as template…
+          </button>
           <button type="button" className="fd-btn" onClick={onClose}>
             Cancel
           </button>

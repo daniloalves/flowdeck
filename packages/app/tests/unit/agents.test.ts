@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { normalizeArgs } from '../../src/main/agents/args';
 import { tempDir } from '../helpers';
-import type { NodeRecord } from '@flowdeck/shared';
+import { newNodeSchema, type NodeRecord } from '@flowdeck/shared';
+import { claudeAdapter } from '../../src/main/agents/claude';
 import { codexAdapter } from '../../src/main/agents/codex';
 import { kiroAdapter } from '../../src/main/agents/kiro';
 import type { LaunchContext } from '../../src/main/agents/types';
@@ -91,6 +92,51 @@ describe('Kiro adapter', () => {
     expect(kiroAdapter.skipsApprovals(['-a'], { configDir: null, cwd: '/nonexistent', home: '/nonexistent' })).toBe(true);
     expect(kiroAdapter.skipsApprovals(['--trust-tools=fs_read,execute_bash'], { configDir: null, cwd: '/nonexistent', home: '/nonexistent' })).toBe(true);
     expect(kiroAdapter.skipsApprovals(['--trust-tools', 'fs_read'], { configDir: null, cwd: '/nonexistent', home: '/nonexistent' })).toBe(false);
+  });
+});
+
+describe('first task of a launched node', () => {
+  const task = '--fix the "login" bug\nthen run the tests';
+  const claudeCtx = (extra: Partial<LaunchContext> = {}) =>
+    ctx({
+      node: node({ kind: 'claude', accountId: 'default', sessionId: 'sid', launchArgs: ['--add-dir', '/x'] }),
+      account: { id: 'default', agent: 'claude', label: 'C', configDir: '/nonexistent/.claude', color: '#ffffff', cap5h: null, cap7d: null },
+      task,
+      ...extra,
+    });
+
+  it('goes last, after --, on a fresh first launch of every agent', () => {
+    // after a variadic option (--add-dir) and despite its leading dashes
+    expect(claudeAdapter.launch(claudeCtx()).command.slice(-4)).toEqual(['--add-dir', '/x', '--', task]);
+    expect(codexAdapter.launch(ctx({ task })).command.slice(-2)).toEqual(['--', task]);
+    expect(codexAdapter.launch(ctx({ task })).initialDetail).toMatch(/with your task/);
+    const k = node({ kind: 'kiro', accountId: null });
+    expect(kiroAdapter.launch(ctx({ node: k, account: null, task })).command).toEqual(['/bin/codex', 'chat', '--', task]);
+  });
+
+  it('is never sent again on a restart or a resume', () => {
+    expect(claudeAdapter.launch(claudeCtx({ firstLaunch: false })).command).not.toContain(task);
+    expect(codexAdapter.launch(ctx({ task, firstLaunch: false })).command).not.toContain(task);
+    expect(codexAdapter.launch(ctx({ task, firstLaunch: false, node: node({ sessionId: 'abc' }) })).command).not.toContain(task);
+    const k = node({ kind: 'kiro', accountId: null });
+    expect(kiroAdapter.launch(ctx({ node: k, account: null, task, firstLaunch: false })).command).toEqual(['/bin/codex', 'chat', '--resume']);
+    expect(claudeAdapter.launch(claudeCtx({ task: undefined })).command).not.toContain('--');
+  });
+
+  it('Claude refuses a one-word task that could name a subcommand; /commands and sentences pass', () => {
+    for (const t of ['mcp', 'update', ' doctor ', 'plugin:install']) expect(claudeAdapter.taskError(t)).toMatch(/subcommand/);
+    for (const t of ['/init', 'fix the bug', 'mcp list servers']) expect(claudeAdapter.taskError(t)).toBeNull();
+    expect(codexAdapter.taskError('completion')).toBeNull();
+  });
+
+  it('the schema caps the task at 12 KiB of UTF-8 and refuses control characters', () => {
+    const base = { kind: 'claude', title: 't', cwd: '/p', accountId: 'default' };
+    expect(newNodeSchema.safeParse({ ...base, task: 'x'.repeat(12 * 1024) }).success).toBe(true);
+    expect(newNodeSchema.safeParse({ ...base, task: 'x'.repeat(12 * 1024 + 1) }).success).toBe(false);
+    expect(newNodeSchema.safeParse({ ...base, task: 'é'.repeat(6 * 1024 + 1) }).success).toBe(false); // 2 bytes each
+    expect(newNodeSchema.safeParse({ ...base, task: 'line 1\n\tline 2' }).success).toBe(true);
+    expect(newNodeSchema.safeParse({ ...base, task: 'evil\u001b[201~' }).success).toBe(false);
+    expect(newNodeSchema.safeParse({ ...base, task: 'cr\r' }).success).toBe(false);
   });
 });
 

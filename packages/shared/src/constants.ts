@@ -69,6 +69,12 @@ export const LIMITS = {
   /** Max groups + texts drawn on the canvas, and characters of one text. */
   annotations: 1000,
   annotationChars: 2000,
+  /** Max node templates. */
+  templates: 200,
+  /** Max UTF-8 bytes of a launched node's first task (it travels as a CLI argument through tmux). */
+  taskBytes: 12 * 1024,
+  /** Max characters of a link opened from a terminal (login URLs are long). */
+  linkChars: 8192,
 } as const;
 
 export const USAGE = {

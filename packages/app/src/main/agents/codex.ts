@@ -109,6 +109,9 @@ export const codexAdapter: AgentAdapter = {
     return false;
   },
 
+  // Clap reads everything after `--` as the prompt (`codex -- completion` starts a chat, verified).
+  taskError: () => null,
+
   launch(ctx) {
     if (!ctx.account) throw new Error('a Codex node needs an account');
     const start = ctx.node.sessionId
@@ -133,13 +136,18 @@ export const codexAdapter: AgentAdapter = {
       '-c',
       `mcp_servers.flowdeck.env={${env}}`,
     ];
+    // A first task goes after `--`, so a leading dash or an option value cannot take it.
+    const task = ctx.task && ctx.firstLaunch && start.length === 0 ? ['--', ctx.task] : [];
     return {
-      command: [ctx.bin, ...start, ...hooks, ...mcp, ...ctx.node.launchArgs],
+      command: [ctx.bin, ...start, ...hooks, ...mcp, ...ctx.node.launchArgs, ...task],
       env: accountEnv(ctx.account.configDir, ctx.home, CODEX_ACCOUNTS),
       files: [],
       // Not deliverable until Codex shows it is past any start-up dialog (its first hook event).
       initialState: 'starting',
-      initialDetail: 'Ready for your first prompt. If Codex asks, trust FlowDeck’s hooks once.',
+      initialDetail:
+        task.length > 0
+          ? 'Starting with your task. If Codex asks, trust FlowDeck’s hooks once.'
+          : 'Ready for your first prompt. If Codex asks, trust FlowDeck’s hooks once.',
     };
   },
 };

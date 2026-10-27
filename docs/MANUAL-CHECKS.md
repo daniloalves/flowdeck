@@ -18,6 +18,8 @@ token-free smoke test against the real CLI. These acceptance items need a person
 | 11 | Clipboard with other apps | Select text in a node, middle-click in gedit/Firefox: it pastes; Ctrl+V there pastes it too. Select text in another app, middle-click in a node: it is typed at the prompt (not executed) |
 | 12 | Scrollback | Scroll back with the wheel in a busy Claude node: a slim grey scrollbar appears (no yellow `[n/m]`), dragging it scrolls, typing a letter returns to the prompt with the letter typed |
 | 13 | Groups and texts | Group two terminals (select one, Ctrl+Shift+G), name it, drag the group: both terminals follow; add a text, restart FlowDeck: everything is where you left it |
+| 14 | Task launcher | Save a Claude template on a folder you have not trusted yet, launch it with a short task: Claude asks to trust the folder, you choose "Yes", and the task runs right after. Do the same with a Codex template (hook review on first use) and a Kiro one. Restart a launched node: the task is not sent again |
+| 15 | Links and selection | In a Claude node, ask for a reply with a long URL. Hover it: the tooltip shows it. Ctrl+click: it opens in your default browser (a plain click does not). Select a word by dragging exactly from its first to its last letter, middle-click in gedit: the whole word is pasted |
 
 Known limitations to keep in mind while checking:
 - Kiro has no "needs you" state; Codex stays "Starting" until its hooks are trusted and it gets a first prompt.

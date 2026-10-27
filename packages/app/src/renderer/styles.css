@@ -736,6 +736,49 @@ kbd {
   cursor: not-allowed;
 }
 
+/* ---------- task launcher ---------- */
+
+.fd-launch-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fd-launch-form textarea {
+  resize: vertical;
+  min-height: 120px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.fd-launch-note {
+  margin: 0;
+  font-size: 12px;
+}
+
+.fd-launch-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.fd-launch-templates {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+}
+
+.fd-size-fields {
+  gap: 16px;
+}
+
 /* ---------- canvas drawings: groups and texts ---------- */
 
 /* A group's interior lets clicks through (pan, select terminals); only its title bar is solid. */

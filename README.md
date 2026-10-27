@@ -30,8 +30,8 @@ credentials read.
 
 ```bash
 sudo apt install tmux curl
-cp packages/app/release/flowdeck-0.3.0-amd64.deb /tmp/   # apt reads it as an unprivileged user
-sudo apt install /tmp/flowdeck-0.3.0-amd64.deb             # sets up Chromium's sandbox + AppArmor profile
+cp packages/app/release/flowdeck-0.4.0-amd64.deb /tmp/   # apt reads it as an unprivileged user
+sudo apt install /tmp/flowdeck-0.4.0-amd64.deb             # sets up Chromium's sandbox + AppArmor profile
 ```
 
 **macOS (experimental, unsigned, untested on real hardware):** a `.dmg` is built for Apple Silicon
@@ -55,11 +55,21 @@ system login (`kiro-cli login`).
   directory. The dialog remembers your last choices and **How many** creates up to 6 at once.
   **Duplicate** (`Ctrl+Shift+D`, the ⧉ button or the Terminals panel) clones a node into a new
   session next to it.
+- **Launch** (`Ctrl+Shift+L`) starts a node from a **template** and gives it a first **task**.
+  A template holds the type, folder, account, extra arguments, size and default title. Create one
+  with **+ New template** or with **Save as template…** in the New node dialog. Pick a template,
+  optionally name the node, write the task, then press **Launch** (`Ctrl+Enter`). The node appears
+  on the canvas and the agent starts working on the task. The task is the agent's first prompt,
+  passed on its command line: it is sent once (never again on a resume), it is limited to 12 KB,
+  and other processes on this computer can read it while the agent runs, so keep secrets out of
+  it. A Shell template types the task as commands.
 - Drag by the header, resize when selected, double-click the header to zoom to 100 %.
   Rename with ✎ in the header or in the Terminals panel (or double-click the title).
 - **Terminal text** (Ubuntu conventions): selecting with the mouse copies (PRIMARY and clipboard);
   **middle click** pastes the selection, **Ctrl+Shift+V** pastes the clipboard, **Ctrl+Shift+C**
   copies. Selection is exact at any canvas zoom.
+- **Links**: **Ctrl+click** a link in a terminal to open it in your browser; hovering shows where it
+  goes. Only http(s) links open.
 - **Scrollback**: the mouse wheel scrolls back with a slim scrollbar you can drag; just start
   typing to return to the prompt.
 - **Groups and texts** on the canvas: **▭ Group** (`Ctrl+Shift+G`) wraps the selected terminals,

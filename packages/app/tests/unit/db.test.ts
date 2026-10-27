@@ -79,6 +79,37 @@ describe('database', () => {
     ).toThrow(/CHECK/);
   });
 
+  it('migrates a v3 database to v4: templates table, existing data untouched', () => {
+    const db = new Database(':memory:');
+    db.pragma('foreign_keys = ON');
+    for (const m of MIGRATIONS.slice(0, 3)) db.exec(m);
+    db.pragma('user_version = 3');
+    db.exec("INSERT INTO annotation VALUES ('t','text','hi','#ffffff',20,0,0,100,40,1)");
+    migrate(db);
+    const repo = new Repo(db);
+    expect(repo.listAnnotations().map((a) => a.text)).toEqual(['hi']);
+    expect(repo.listTemplates()).toEqual([]);
+    expect(() =>
+      db.exec("INSERT INTO node_template VALUES ('x','X','vim','','/p',NULL,'[]',720,440,1)"),
+    ).toThrow(/CHECK/);
+  });
+
+  it('templates: save inserts or replaces (keeping the creation time), sorted by name; a deleted account is cleared', () => {
+    const repo = memoryRepo();
+    repo.upsertAccount({ id: 'work', agent: 'claude', label: 'Work', configDir: '/h/.claude-work', color: '#ffffff', cap5h: null, cap7d: null });
+    const base = { kind: 'claude' as const, title: '', cwd: '/p', accountId: 'work', launchArgs: ['--model', 'opus'], w: 720, h: 440 };
+    repo.saveTemplate({ ...base, id: 'b', name: 'beta', createdAt: 1 });
+    repo.saveTemplate({ ...base, id: 'a', name: 'Alpha', createdAt: 2 });
+    expect(repo.listTemplates().map((t) => t.name)).toEqual(['Alpha', 'beta']);
+    repo.saveTemplate({ ...base, id: 'b', name: 'beta', title: 'Reviewer', w: 900, createdAt: 99 });
+    expect(repo.getTemplate('b')).toMatchObject({ title: 'Reviewer', w: 900, createdAt: 1, launchArgs: ['--model', 'opus'] });
+    expect(repo.countTemplates()).toBe(2);
+    repo.deleteAccount('work');
+    expect(repo.getTemplate('a')!.accountId).toBeNull();
+    repo.deleteTemplate('a');
+    expect(repo.listTemplates().map((t) => t.id)).toEqual(['b']);
+  });
+
   it('round-trips groups and texts; updates merge; deletes', () => {
     const repo = memoryRepo();
     const base = { text: '', color: '#7c6cf2', fontSize: 20, x: 0, y: 0, w: 400, h: 300, createdAt: 1 };

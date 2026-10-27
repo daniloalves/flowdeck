@@ -1,6 +1,6 @@
 {
   "name": "@flowdeck/mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "flowdeck-mcp: stdio MCP server that lets a FlowDeck node talk to its connected peers",

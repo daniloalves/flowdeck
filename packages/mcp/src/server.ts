@@ -19,7 +19,7 @@ async function guarded(fn: () => Promise<string>): Promise<CallToolResult> {
 
 export function createServer(client: AppClient | null): McpServer {
   const server = new McpServer(
-    { name: 'flowdeck', version: '0.3.0' },
+    { name: 'flowdeck', version: '0.4.0' },
     {
       instructions:
         'Tools to talk to other coding agents (Claude Code, Codex, Kiro) on the FlowDeck canvas. You can only reach peers ' +

@@ -50,6 +50,11 @@ export const claudeAdapter: AgentAdapter = {
   skipsApprovals: (args, { configDir, cwd }) =>
     argsSkipPermissions(args) || (configDir !== null && settingsSkipPermissions(configDir, cwd)),
 
+  // Claude Code still runs a subcommand named by the whole first operand, even after `--`
+  // (`claude -- mcp`, verified with 2.1.311).
+  taskError: (task) =>
+    /^[A-Za-z][\w:-]*$/.test(task.trim()) ? 'a one-word task could run a Claude Code subcommand: write a sentence (or a /command)' : null,
+
   launch(ctx) {
     if (!ctx.account) throw new Error('a Claude node needs an account');
     const start = planClaudeStart(
@@ -70,6 +75,8 @@ export const claudeAdapter: AgentAdapter = {
         ctx.claudeSettings,
         ...claudeStartArgs(start),
         ...ctx.node.launchArgs,
+        // After `--`, so neither a variadic option nor a leading dash can take the task.
+        ...(ctx.task && ctx.firstLaunch && start.mode === 'new' ? ['--', ctx.task] : []),
       ],
       env: accountEnv(ctx.account.configDir, ctx.home, CLAUDE_ACCOUNTS),
       files: [{ path: mcpConfig, content: nodeMcpConfig(runner, {}) }],

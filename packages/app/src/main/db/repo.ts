@@ -11,6 +11,7 @@ import type {
   NodeRecord,
   NodeState,
   NodeStatus,
+  NodeTemplate,
   Viewport,
 } from '@flowdeck/shared';
 import type { Db } from './database';
@@ -82,6 +83,19 @@ interface AnnotationRow {
   created_at: number;
 }
 
+interface TemplateRow {
+  id: string;
+  name: string;
+  kind: NodeKind;
+  title: string;
+  cwd: string;
+  account_id: string | null;
+  launch_args: string;
+  w: number;
+  h: number;
+  created_at: number;
+}
+
 export interface NodeWithToken extends NodeRecord {
   token: string;
 }
@@ -130,6 +144,19 @@ const toAnnotation = (r: AnnotationRow): Annotation => ({
   fontSize: r.font_size,
   x: r.x,
   y: r.y,
+  w: r.w,
+  h: r.h,
+  createdAt: r.created_at,
+});
+
+const toTemplate = (r: TemplateRow): NodeTemplate => ({
+  id: r.id,
+  name: r.name,
+  kind: r.kind,
+  title: r.title,
+  cwd: r.cwd,
+  accountId: r.account_id,
+  launchArgs: parseArgs(r.launch_args),
   w: r.w,
   h: r.h,
   createdAt: r.created_at,
@@ -384,6 +411,40 @@ export class Repo {
 
   deleteAnnotation(id: string): void {
     this.db.prepare('DELETE FROM annotation WHERE id = ?').run(id);
+  }
+
+  /* node templates */
+
+  listTemplates(): NodeTemplate[] {
+    return (this.db.prepare('SELECT * FROM node_template ORDER BY name COLLATE NOCASE, created_at').all() as TemplateRow[]).map(
+      toTemplate,
+    );
+  }
+
+  countTemplates(): number {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM node_template').get() as { n: number }).n;
+  }
+
+  getTemplate(id: string): NodeTemplate | null {
+    const row = this.db.prepare('SELECT * FROM node_template WHERE id = ?').get(id) as TemplateRow | undefined;
+    return row ? toTemplate(row) : null;
+  }
+
+  /** Inserts or replaces every field of a template (its creation time is kept). */
+  saveTemplate(t: NodeTemplate): void {
+    this.db
+      .prepare(
+        `INSERT INTO node_template (id, name, kind, title, cwd, account_id, launch_args, w, h, created_at)
+         VALUES (@id, @name, @kind, @title, @cwd, @accountId, @launchArgs, @w, @h, @createdAt)
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, kind = excluded.kind, title = excluded.title,
+           cwd = excluded.cwd, account_id = excluded.account_id, launch_args = excluded.launch_args,
+           w = excluded.w, h = excluded.h`,
+      )
+      .run({ ...t, launchArgs: JSON.stringify(t.launchArgs) });
+  }
+
+  deleteTemplate(id: string): void {
+    this.db.prepare('DELETE FROM node_template WHERE id = ?').run(id);
   }
 
   /* app state */

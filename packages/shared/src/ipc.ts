@@ -6,11 +6,20 @@ import type {
   DiscoveredDir,
   Edge,
   Message,
+  NodeTemplate,
   NodeView,
   ScrollState,
   Viewport,
 } from './model';
-import type { AccountInput, AnnotationPatch, NewAnnotationInput, NewEdgeInput, NewNodeInput, NodePatch } from './schemas';
+import type {
+  AccountInput,
+  AnnotationPatch,
+  NewAnnotationInput,
+  NewEdgeInput,
+  NewNodeInput,
+  NodePatch,
+  TemplateInput,
+} from './schemas';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -27,6 +36,9 @@ export interface InvokeApi {
   'annotation:create': (input: NewAnnotationInput) => Annotation;
   'annotation:update': (id: string, patch: AnnotationPatch) => Annotation;
   'annotation:delete': (id: string) => void;
+  'template:create': (input: TemplateInput) => NodeTemplate;
+  'template:update': (id: string, input: TemplateInput) => NodeTemplate;
+  'template:delete': (id: string) => void;
   'account:discover': () => DiscoveredDir[];
   'account:upsert': (input: AccountInput) => Account;
   'account:delete': (id: string) => void;
@@ -53,6 +65,8 @@ export interface SendApi {
   'pty:paste': { nodeId: string; source: 'selection' | 'clipboard'; bracketed: boolean };
   /** Text selected in a terminal: sets both PRIMARY and the clipboard. */
   'clipboard:write': { text: string };
+  /** A link Ctrl+clicked in a terminal; main opens it in the browser if it is an http(s) link. */
+  'link:open': { url: string };
 }
 
 export type SendChannel = keyof SendApi;
@@ -84,6 +98,9 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'annotation:create',
   'annotation:update',
   'annotation:delete',
+  'template:create',
+  'template:update',
+  'template:delete',
   'account:discover',
   'account:upsert',
   'account:delete',
@@ -103,6 +120,7 @@ export const SEND_CHANNELS: readonly SendChannel[] = [
   'pty:paste',
   'pty:scrollTo',
   'clipboard:write',
+  'link:open',
 ];
 
 export const EVENT_CHANNELS: readonly EventChannel[] = [

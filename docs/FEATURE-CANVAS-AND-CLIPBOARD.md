@@ -80,7 +80,8 @@ test at 80 % and 150 % zoom fails if the fix stops applying.
   the rectangle (a click gives a default size). `Esc` cancels.
 - **Deleting**: toolbar ✕ or Delete/Backspace on a selected annotation. The keyboard still never
   deletes terminals.
-- Layering: groups below terminals and edges (negative z-index, also when selected); texts above.
+- Layering: groups below terminals and edges (negative z-index, also when selected); texts above,
+  also above a selected terminal (see `IMPROVEMENT-TEXTS-ON-TOP.md`).
 
 ## 3. Design validation
 

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.0
+
+- **Selection copies the last character too** (it was left out when the drag ended on it). A
+  drag past the end of a line no longer puts a line break in the clipboard.
+- **Ctrl+click opens links** from terminals in your browser, both URLs printed as text and OSC 8
+  hyperlinks. Only http(s) links open; hovering shows the target.
+- **Task launcher**: node templates (type, folder, account, arguments, size, default title) and a
+  **Launch** panel (Ctrl+Shift+L) that starts a node from a template with a first task, up to
+  12 KB. **Save as template…** in the New node dialog.
+- **Canvas texts always stay in front**: a text placed over a terminal no longer disappears behind
+  it when the terminal is selected or focused.
+
+Install on Ubuntu/Debian: `sudo apt install ./flowdeck-0.4.0-amd64.deb` (copy it to `/tmp` first
+if it sits in your home directory). On macOS: `brew install tmux`, then open the app with
+right-click → Open the first time.
+
+Upgrade from 0.3.0: the database migrates automatically (templates table), and the new tmux
+settings are applied to running sessions when FlowDeck starts.
+
 ## 0.3.0
 
 - **Exact mouse selection** in terminals at any canvas zoom (the pointer used to pick a line above

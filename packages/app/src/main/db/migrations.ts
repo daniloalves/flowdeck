@@ -99,4 +99,18 @@ export const MIGRATIONS: readonly string[] = [
     created_at INTEGER NOT NULL
   );
   `,
+
+  /* 4 — node templates for the task launcher; a deleted account leaves the template without one */ `
+  CREATE TABLE node_template (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    kind        TEXT NOT NULL CHECK (kind IN ('claude', 'codex', 'kiro', 'shell')),
+    title       TEXT NOT NULL DEFAULT '',
+    cwd         TEXT NOT NULL,
+    account_id  TEXT REFERENCES account(id) ON DELETE SET NULL,
+    launch_args TEXT NOT NULL DEFAULT '[]',
+    w REAL NOT NULL, h REAL NOT NULL,
+    created_at  INTEGER NOT NULL
+  );
+  `,
 ];

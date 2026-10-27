@@ -170,6 +170,10 @@ export function TerminalsPanel() {
           <span className="fd-muted">Add a text to the canvas</span>
         </div>
         <div className="fd-legend-row">
+          <kbd>Ctrl+Shift+L</kbd>
+          <span className="fd-muted">Launch a task from a template</span>
+        </div>
+        <div className="fd-legend-row">
           <kbd>Middle click</kbd>
           <span className="fd-muted">Paste the selection into a terminal (selecting copies)</span>
         </div>

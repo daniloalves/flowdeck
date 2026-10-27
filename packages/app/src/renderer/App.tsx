@@ -5,14 +5,16 @@ import { call, on } from './api';
 import { Canvas } from './canvas/Canvas';
 import { groupSelection } from './canvas/drawing';
 import { AccountsPanel } from './panels/AccountsPanel';
+import { LaunchPanel } from './panels/LaunchPanel';
 import { MessagesPanel } from './panels/MessagesPanel';
 import { NewNodeDialog } from './panels/NewNodeDialog';
+import { TemplateDialog } from './panels/TemplateDialog';
 import { TerminalsPanel } from './panels/TerminalsPanel';
 import { Bullet } from './status/legend';
 import { useStore, type Panel } from './store/store';
 
-type AppShortcut = 'new' | 'duplicate' | 'group' | 'text';
-const SHORTCUT_KEYS: Record<string, AppShortcut> = { n: 'new', d: 'duplicate', g: 'group', x: 'text' };
+type AppShortcut = 'new' | 'duplicate' | 'group' | 'text' | 'launch';
+const SHORTCUT_KEYS: Record<string, AppShortcut> = { n: 'new', d: 'duplicate', g: 'group', x: 'text', l: 'launch' };
 
 /** Global shortcuts (Ctrl+Shift+key). xterm is told to ignore them (see terminal/Terminal.tsx). */
 export const isAppShortcut = (e: KeyboardEvent): AppShortcut | null => {
@@ -78,6 +80,7 @@ function useShortcuts(): void {
         if (!st.dialog) st.openDialog({});
       } else if (action === 'duplicate') void duplicateSelected();
       else if (action === 'group') startGroup();
+      else if (action === 'launch') st.setPanel(st.panel === 'launch' ? 'none' : 'launch');
       else st.setDrawMode('text');
     };
     // Capture phase: runs before xterm or React Flow see the key.
@@ -199,6 +202,7 @@ function Toolbar() {
         <input type="checkbox" checked={env?.autostart ?? false} onChange={() => void toggleAutostart()} />
         Start at login
       </label>
+      <TabButton id="launch" label="Launch" testId="toggle-launch" />
       <TabButton id="terminals" label={<TerminalsTabLabel />} testId="toggle-terminals" />
       <TabButton id="accounts" label="Accounts" testId="toggle-accounts" />
       <TabButton id="messages" label="Messages" testId="toggle-messages" />
@@ -214,6 +218,8 @@ function Shell() {
   const dialog = useStore((s) => s.dialog);
   const openDialog = useStore((s) => s.openDialog);
   const closeDialog = useStore((s) => s.closeDialog);
+  const templateDialog = useStore((s) => s.templateDialog);
+  const closeTemplateDialog = useStore((s) => s.closeTemplateDialog);
   const toasts = useStore((s) => s.toasts);
   const dismiss = useStore((s) => s.dismiss);
 
@@ -227,8 +233,10 @@ function Shell() {
           <AccountsPanel onLogin={(account) => openDialog({ kind: account.agent, account: account.id, title: `Login: ${account.label}` })} />
         )}
         {panel === 'messages' && <MessagesPanel />}
+        {panel === 'launch' && <LaunchPanel />}
       </main>
       {dialog && <NewNodeDialog initial={dialog} onClose={closeDialog} />}
+      {templateDialog && <TemplateDialog initial={templateDialog} onClose={closeTemplateDialog} />}
       <div className="fd-toasts">
         {toasts.map((t) => (
           <div key={t.id} className={`fd-toast fd-toast-${t.kind}`} onClick={() => dismiss(t.id)} role="alert">

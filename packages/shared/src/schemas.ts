@@ -32,13 +32,27 @@ export const launchArgsSchema = z
   .array(z.string().min(1).max(LIMITS.launchArgChars).regex(/^[^\p{Cc}]+$/u))
   .max(LIMITS.launchArgs);
 
+/** UTF-8 size: the unit tmux and the kernel measure command lines in. */
+export const utf8Bytes = (s: string): number => new TextEncoder().encode(s).length;
+
+/** First task of a launched node: multi-line text, no other control characters. */
+export const taskSchema = z
+  .string()
+  .max(LIMITS.taskBytes)
+  .regex(/^(?:[^\p{Cc}]|[\n\t])*$/u, 'the task cannot contain control characters')
+  .refine((t) => utf8Bytes(t) <= LIMITS.taskBytes, `the task is longer than ${LIMITS.taskBytes / 1024} KB`);
+
+const nodeKindSchema = z.enum(['claude', 'codex', 'kiro', 'shell']);
+
 export const newNodeSchema = z.object({
-  kind: z.enum(['claude', 'codex', 'kiro', 'shell']),
+  kind: nodeKindSchema,
   title: titleSchema,
   cwd: absPathSchema,
   accountId: accountIdSchema.nullable(),
   launchArgs: launchArgsSchema.default([]),
   layout: layoutSchema.optional(),
+  /** Typed as the agent's first prompt (first launch only). */
+  task: taskSchema.optional(),
 });
 export type NewNodeInput = z.input<typeof newNodeSchema>;
 
@@ -47,6 +61,18 @@ export const nodePatchSchema = z.object({
   layout: layoutSchema.optional(),
 });
 export type NodePatch = z.infer<typeof nodePatchSchema>;
+
+export const templateInputSchema = z.object({
+  name: titleSchema,
+  kind: nodeKindSchema,
+  title: z.string().trim().max(LIMITS.titleChars).regex(/^[^\p{Cc}]*$/u, 'title cannot contain control characters').default(''),
+  cwd: absPathSchema,
+  accountId: accountIdSchema.nullable(),
+  launchArgs: launchArgsSchema.default([]),
+  w: layoutSchema.shape.w,
+  h: layoutSchema.shape.h,
+});
+export type TemplateInput = z.input<typeof templateInputSchema>;
 
 /** Font sizes offered for canvas texts (S, M, L, XL). */
 export const ANNOTATION_FONT_SIZES = [14, 20, 32, 48] as const;
@@ -79,6 +105,8 @@ export const annotationPatchSchema = z
 export type AnnotationPatch = z.infer<typeof annotationPatchSchema>;
 
 export const clipboardWriteSchema = z.object({ text: z.string().min(1).max(LIMITS.clipboardChars) });
+/** A link Ctrl+clicked in a terminal; main still checks it is a web link before opening it. */
+export const linkOpenSchema = z.object({ url: z.string().min(1).max(LIMITS.linkChars) });
 export const ptyPasteSchema = z.object({
   nodeId: idSchema,
   source: z.enum(['selection', 'clipboard']),
