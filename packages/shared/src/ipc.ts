@@ -1,6 +1,7 @@
 import type {
   Annotation,
   Account,
+  AppSettings,
   AccountUsage,
   AppSnapshot,
   DiscoveredDir,
@@ -8,6 +9,7 @@ import type {
   Message,
   NodeTemplate,
   NodeView,
+  QuickLaunchState,
   ScrollState,
   Viewport,
 } from './model';
@@ -18,7 +20,10 @@ import type {
   NewEdgeInput,
   NewNodeInput,
   NodePatch,
+  QuickLaunchInput,
+  SettingsPatch,
   TemplateInput,
+  TemplateLaunchInput,
 } from './schemas';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -39,6 +44,15 @@ export interface InvokeApi {
   'template:create': (input: TemplateInput) => NodeTemplate;
   'template:update': (id: string, input: TemplateInput) => NodeTemplate;
   'template:delete': (id: string) => void;
+  /** Launches a node from a template with its composed task (Launch panel). */
+  'template:launch': (input: TemplateLaunchInput) => NodeView;
+  'settings:update': (patch: SettingsPatch) => { settings: AppSettings; shortcutActive: boolean };
+  /** Quick-launch window only: the text and templates to show (null when it is closed). */
+  'quick:state': () => QuickLaunchState | null;
+  /** Quick-launch window only. */
+  'quick:launch': (input: QuickLaunchInput) => NodeView;
+  /** Quick-launch window only: closes it. */
+  'quick:close': () => void;
   'account:discover': () => DiscoveredDir[];
   'account:upsert': (input: AccountInput) => Account;
   'account:delete': (id: string) => void;
@@ -82,6 +96,10 @@ export interface EventApi {
   'message:added': Message;
   'message:changed': Message;
   'ui:focusNode': { nodeId: string };
+  /** A group grew to hold a node launched into it. */
+  'annotation:changed': Annotation;
+  /** Sent to the quick-launch window each time it opens. */
+  'quick:show': QuickLaunchState;
 }
 
 export type EventChannel = keyof EventApi;
@@ -101,6 +119,11 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'template:create',
   'template:update',
   'template:delete',
+  'template:launch',
+  'settings:update',
+  'quick:state',
+  'quick:launch',
+  'quick:close',
   'account:discover',
   'account:upsert',
   'account:delete',
@@ -133,7 +156,12 @@ export const EVENT_CHANNELS: readonly EventChannel[] = [
   'message:added',
   'message:changed',
   'ui:focusNode',
+  'annotation:changed',
+  'quick:show',
 ];
+
+/** Channels only the quick-launch window may invoke; every other channel is the main window's. */
+export const QUICK_CHANNELS: readonly InvokeChannel[] = ['quick:state', 'quick:launch', 'quick:close'];
 
 /** API exposed on `window.flowdeck` by the preload script. */
 export interface FlowDeckBridge {

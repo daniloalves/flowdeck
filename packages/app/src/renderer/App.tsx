@@ -37,6 +37,7 @@ function useMainEvents(): void {
       on('usage:changed', (u) => st().setUsage(u)),
       on('message:added', (m) => st().upsertMessage(m)),
       on('message:changed', (m) => st().upsertMessage(m)),
+      on('annotation:changed', (a) => st().upsertAnnotation(a)),
     ];
     call('app:snapshot')
       .then((s) => st().load(s))

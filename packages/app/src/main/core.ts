@@ -17,11 +17,20 @@ import {
   newEdgeSchema,
   newNodeSchema,
   nodePatchSchema,
+  composeTask,
+  folderName,
+  placeInGroup,
+  readSettings,
   sendToSchema,
+  settingsPatchSchema,
+  spotNear,
   templateInputSchema,
+  templateLaunchSchema,
+  uniqueTitle,
   type Account,
   type AccountUsage,
   type Annotation,
+  type AppSettings,
   type AppSnapshot,
   type DiscoveredDir,
   type Edge,
@@ -37,6 +46,8 @@ import {
   type NodeTemplate,
   type NodeView,
   type PeerInfo,
+  type QuickGroup,
+  type QuickTemplate,
   type SendResult,
   type Viewport,
 } from '@flowdeck/shared';
@@ -75,6 +86,8 @@ export interface CoreOptions {
 }
 
 const DEFAULT_SIZE = { w: 720, h: 440 };
+/** Where the n-th node goes when nothing says where: a grid of four columns. */
+const gridSpot = (n: number) => ({ x: 80 + (n % 4) * 760, y: 80 + Math.floor(n / 4) * 480 });
 const NOTIFY_INTERVAL_MS = 3000;
 /** Activity status (agents without hooks): output within this window means "working"... */
 const ACTIVE_WITHIN_MS = 3000;
@@ -97,7 +110,8 @@ export class Core {
   /** Skip-approval verdict per node: flags + settings files, refreshed on every launch. */
   private dangerCache = new Map<string, boolean>();
   private lastNotify = new Map<string, number>();
-  private duplicateQueue: Promise<unknown> = Promise.resolve();
+  /** Duplicates and template launches pick unique titles one at a time. */
+  private titleQueue: Promise<unknown> = Promise.resolve();
   private dangerCheckedAt = 0;
 
   constructor(readonly opts: CoreOptions) {
@@ -146,6 +160,7 @@ export class Core {
       templates: this.repo.listTemplates(),
       usage: [...this.usage.values()],
       viewport: this.repo.getViewport(),
+      settings: this.settings(),
       env: {
         home: this.opts.home,
         tmuxAvailable: this.tmuxVersion !== null,
@@ -155,6 +170,7 @@ export class Core {
           string | null
         >,
         autostart: false,
+        quickShortcutActive: false,
       },
     };
   }
@@ -253,7 +269,7 @@ export class Core {
 
     const id = randomUUID();
     const count = this.repo.listNodes().length;
-    const layout = input.layout ?? { x: 80 + (count % 4) * 760, y: 80 + Math.floor(count / 4) * 480, ...DEFAULT_SIZE };
+    const layout = input.layout ?? { ...gridSpot(count), ...DEFAULT_SIZE };
     const node: NodeWithToken = {
       id,
       kind: input.kind,
@@ -311,8 +327,8 @@ export class Core {
    */
   duplicateNode(id: string): Promise<NodeView> {
     const run = () => this.duplicateNow(id);
-    const next = this.duplicateQueue.then(run, run);
-    this.duplicateQueue = next.catch(() => undefined);
+    const next = this.titleQueue.then(run, run);
+    this.titleQueue = next.catch(() => undefined);
     return next;
   }
 
@@ -610,6 +626,106 @@ export class Core {
 
   deleteTemplate(id: string): void {
     this.repo.deleteTemplate(id);
+  }
+
+  /**
+   * Launches a node from a template: the template's task composed with `text`, a unique title, and
+   * a place inside a group (which grows when it is full) or around `center` of the visible canvas.
+   */
+  launchTemplate(raw: unknown): Promise<NodeView> {
+    const input = templateLaunchSchema.parse(raw);
+    const run = () => this.launchTemplateNow(input);
+    const next = this.titleQueue.then(run, run);
+    this.titleQueue = next.catch(() => undefined);
+    return next;
+  }
+
+  private async launchTemplateNow(input: ReturnType<typeof templateLaunchSchema.parse>): Promise<NodeView> {
+    const template = this.repo.getTemplate(input.templateId);
+    if (!template) throw new Error('template not found');
+    const size = { w: template.w, h: template.h };
+    const nodes = this.repo.listNodes();
+    let position = input.center ? spotNear(input.center, size, nodes) : gridSpot(nodes.length);
+    let grown: Annotation | null = null;
+    if (input.groupId) {
+      const group = this.repo.getAnnotation(input.groupId);
+      if (group?.kind !== 'group') throw new Error('group not found');
+      // Texts are drawn above terminals, so a node is not put under one either.
+      const texts = this.repo.listAnnotations().filter((a) => a.kind === 'text');
+      const spot = placeInGroup(group, size, [...nodes, ...texts]);
+      position = spot;
+      if (spot.group.w !== group.w || spot.group.h !== group.h) grown = { ...group, w: spot.group.w, h: spot.group.h };
+    }
+    const base = (input.title || template.title || folderName(template.cwd)).slice(0, LIMITS.titleChars);
+    const task = composeTask(template.task, input.text);
+    const view = await this.createNode({
+      kind: template.kind,
+      title: uniqueTitle(base, new Set(nodes.map((n) => n.title))),
+      cwd: template.cwd,
+      accountId: template.accountId,
+      launchArgs: template.launchArgs,
+      layout: { ...position, ...size },
+      ...(task ? { task } : {}),
+    });
+    if (grown) {
+      this.repo.updateAnnotation(grown.id, { w: grown.w, h: grown.h });
+      this.opts.emit('annotation:changed', this.repo.getAnnotation(grown.id)!);
+    }
+    this.opts.emit('node:changed', view);
+    return view;
+  }
+
+  /** Templates with what the quick-launch window warns about. */
+  describeTemplates(): QuickTemplate[] {
+    return this.repo.listTemplates().map((t) => ({
+      id: t.id,
+      name: t.name,
+      kind: t.kind,
+      title: t.title,
+      cwd: t.cwd,
+      task: t.task,
+      skipsApprovals: this.templateSkipsApprovals(t),
+      problem: this.templateProblem(t),
+    }));
+  }
+
+  groups(): QuickGroup[] {
+    return this.repo
+      .listAnnotations()
+      .filter((a) => a.kind === 'group')
+      .map((g) => ({ id: g.id, title: g.text.trim() || 'Untitled group', color: g.color }));
+  }
+
+  private templateSkipsApprovals(t: NodeTemplate): boolean {
+    if (!isAgentKind(t.kind)) return false;
+    const account = t.accountId ? this.repo.getAccount(t.accountId) : null;
+    return AGENTS[t.kind].skipsApprovals(t.launchArgs, { configDir: account?.configDir ?? null, cwd: t.cwd, home: this.opts.home });
+  }
+
+  private templateProblem(t: NodeTemplate): string | null {
+    try {
+      this.checkLaunchConfig(t);
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
+    if (isAgentKind(t.kind) && !this.opts.agentBins[t.kind]) return `${AGENT_LABEL[t.kind]} is not installed`;
+    return null;
+  }
+
+  /* ------------------------------------------------------------------ settings */
+
+  settings(): AppSettings {
+    return readSettings(this.repo.getSettings());
+  }
+
+  updateSettings(raw: unknown): AppSettings {
+    const patch = settingsPatchSchema.parse(raw);
+    const current = this.settings();
+    const next: AppSettings = { quickLaunch: { ...current.quickLaunch } };
+    if (patch.quickLaunch?.shortcut !== undefined) next.quickLaunch.shortcut = patch.quickLaunch.shortcut;
+    if (patch.quickLaunch?.afterLaunch !== undefined) next.quickLaunch.afterLaunch = patch.quickLaunch.afterLaunch;
+    this.repo.setSettings(next);
+    return next;
   }
 
   /* ------------------------------------------------------------------ agent API */

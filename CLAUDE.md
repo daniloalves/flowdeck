@@ -9,6 +9,10 @@ Design decisions that override the spec: `docs/DESIGN-REVIEW.md`.
 - The renderer never touches Node; everything goes through the preload bridge (allow-listed channels).
 - Every tmux call uses `-L <socket>` and goes through `packages/app/src/main/tmux`.
 - The renderer may write the clipboard but never reads it: pastes are done by main (`pty:paste`).
+  Only exception: when the user presses the quick-launch shortcut, main reads the selection once and
+  hands it to the quick-launch window (`main/quick`).
+- Each window owns its IPC channels: the quick-launch window may invoke only `QUICK_CHANNELS`, and
+  the main window never those.
 - The renderer never opens links: Ctrl+click sends `link:open`, and main opens only http(s) URLs
   without credentials (`main/links.ts`) in the user's browser.
 - Child processes use argv (`execFile`/tmux multi-arg), never shell strings built from user data.
@@ -38,4 +42,5 @@ Design decisions that override the spec: `docs/DESIGN-REVIEW.md`.
 - Test isolation env vars: `FLOWDECK_DATA_DIR`, `FLOWDECK_SOCK_PATH`, `FLOWDECK_TMUX_SOCKET`,
   `FLOWDECK_CLAUDE_BIN`, `FLOWDECK_CODEX_BIN`, `FLOWDECK_KIRO_BIN`, `FLOWDECK_SKIP_SHELL_ENV`, `FLOWDECK_HIDE_WINDOW`, `FLOWDECK_DISABLE_NOTIFICATIONS`,
   `FLOWDECK_TEST_CLIPBOARD` (in-memory clipboard, so E2E never touches the user's),
-  `FLOWDECK_TEST_LINKS` (links are recorded instead of opening a browser).
+  `FLOWDECK_TEST_LINKS` (links are recorded instead of opening a browser),
+  `FLOWDECK_TEST_SHORTCUTS` (global shortcuts are never grabbed; E2E must always set it).

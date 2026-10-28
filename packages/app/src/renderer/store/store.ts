@@ -4,6 +4,7 @@ import type {
   Account,
   Annotation,
   AccountUsage,
+  AppSettings,
   AppSnapshot,
   Edge,
   EdgeDirection,
@@ -52,6 +53,7 @@ interface State {
   usage: Record<string, AccountUsage>;
   messages: Message[];
   env: Environment | null;
+  settings: AppSettings | null;
   viewport: Viewport | null;
   /** Incremented to force a terminal to re-attach (after restart). */
   attachGen: Record<string, number>;
@@ -86,6 +88,7 @@ interface State {
   upsertMessage(m: Message): void;
   bumpAttach(id: string): void;
   setEnv(patch: Partial<Environment>): void;
+  setSettings(settings: AppSettings): void;
   setNewEdgeDirection(d: EdgeDirection): void;
   setPanel(p: Panel): void;
   openDialog(d: DialogState): void;
@@ -111,6 +114,7 @@ export const useStore = create<State>((set) => ({
   usage: {},
   messages: [],
   env: null,
+  settings: null,
   viewport: null,
   attachGen: {},
   newEdgeDirection: 'both',
@@ -129,6 +133,7 @@ export const useStore = create<State>((set) => ({
       accounts: s.accounts,
       usage: Object.fromEntries(s.usage.map((u) => [u.accountId, u])),
       env: s.env,
+      settings: s.settings,
       viewport: s.viewport,
     }),
 
@@ -201,6 +206,7 @@ export const useStore = create<State>((set) => ({
     }),
   bumpAttach: (id) => set((st) => ({ attachGen: { ...st.attachGen, [id]: (st.attachGen[id] ?? 0) + 1 } })),
   setEnv: (patch) => set((st) => (st.env ? { env: { ...st.env, ...patch } } : {})),
+  setSettings: (settings) => set({ settings }),
   setNewEdgeDirection: (newEdgeDirection) => set({ newEdgeDirection }),
   setPanel: (panel) => set({ panel }),
   openDialog: (dialog) => set({ dialog }),

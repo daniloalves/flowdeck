@@ -128,7 +128,53 @@ export interface NodeTemplate {
   /** Size on the canvas. */
   w: number;
   h: number;
+  /** First task; `{{selection}}` takes the selected or typed text. Empty: that text alone. */
+  task: string;
   createdAt: number;
+}
+
+/** What happens after a quick launch: stay in the app the text came from, or show FlowDeck. */
+export type AfterQuickLaunch = 'stay' | 'flowdeck';
+
+export interface AppSettings {
+  quickLaunch: {
+    /** Electron accelerator of the global shortcut ('' = off). */
+    shortcut: string;
+    afterLaunch: AfterQuickLaunch;
+  };
+}
+
+/** Where the quick-launch text came from. */
+export type SelectionSource = 'selection' | 'clipboard' | 'none';
+
+/** A template as the quick-launch window lists it. */
+export interface QuickTemplate {
+  id: string;
+  name: string;
+  kind: NodeKind;
+  title: string;
+  cwd: string;
+  task: string;
+  skipsApprovals: boolean;
+  /** Why it cannot launch now (missing account or CLI), or null. */
+  problem: string | null;
+}
+
+export interface QuickGroup {
+  id: string;
+  title: string;
+  color: string;
+}
+
+/** What the quick-launch window shows when the shortcut is pressed. */
+export interface QuickLaunchState {
+  text: string;
+  source: SelectionSource;
+  /** The selection was longer than FlowDeck reads. */
+  truncated: boolean;
+  templates: QuickTemplate[];
+  groups: QuickGroup[];
+  afterLaunch: AfterQuickLaunch;
 }
 
 /** Scrollback position of a node's terminal (tmux copy mode). */
@@ -155,6 +201,8 @@ export interface Environment {
   /** Absolute path of each agent CLI, or null when it is not installed. */
   agents: Record<AgentKind, string | null>;
   autostart: boolean;
+  /** The quick-launch shortcut is registered (Electron cannot tell when another app owns it). */
+  quickShortcutActive: boolean;
 }
 
 export interface AppSnapshot {
@@ -165,5 +213,6 @@ export interface AppSnapshot {
   templates: NodeTemplate[];
   usage: AccountUsage[];
   viewport: Viewport | null;
+  settings: AppSettings;
   env: Environment;
 }

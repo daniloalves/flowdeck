@@ -779,6 +779,141 @@ kbd {
   gap: 16px;
 }
 
+.fd-task-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.fd-task-preview pre {
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.fd-modal textarea {
+  resize: vertical;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.fd-template-task {
+  min-height: 64px;
+}
+
+.fd-hint-small {
+  font-size: 11px;
+}
+
+.fd-quick-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fd-shortcut {
+  min-width: 120px;
+  font-family: ui-monospace, monospace;
+}
+
+/* ---------- quick-launch window ---------- */
+
+.fd-quick-window,
+.fd-quick-window body {
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.fd-quick {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+}
+
+.fd-quick label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  flex: 1;
+}
+
+.fd-quick textarea {
+  resize: none;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+/* Frameless: the header moves the window. */
+.fd-quick-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  -webkit-app-region: drag;
+}
+
+.fd-quick-head .fd-muted {
+  flex: 1;
+  font-size: 12px;
+}
+
+.fd-quick-head button {
+  -webkit-app-region: no-drag;
+}
+
+.fd-quick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 60px;
+  max-height: 170px;
+  overflow-y: auto;
+}
+
+.fd-quick-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.fd-quick-item.active {
+  background: var(--card);
+  border-color: var(--accent);
+}
+
+.fd-quick-fields {
+  align-items: flex-start;
+}
+
 /* ---------- canvas drawings: groups and texts ---------- */
 
 /* A group's interior lets clicks through (pan, select terminals); only its title bar is solid. */
@@ -918,4 +1053,9 @@ input.fd-group-input {
 .fd-draw-preview-text {
   border-radius: 4px;
   background: none;
+}
+
+.fd-quick .fd-btn-danger {
+  border-color: var(--danger);
+  font-weight: 600;
 }

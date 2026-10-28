@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { LIMITS } from './constants';
+import { DEFAULT_QUICK_SHORTCUT, LIMITS } from './constants';
+import { isAccelerator } from './launch';
+import type { AppSettings } from './model';
 
 const finite = z.number().finite();
 
@@ -71,8 +73,58 @@ export const templateInputSchema = z.object({
   launchArgs: launchArgsSchema.default([]),
   w: layoutSchema.shape.w,
   h: layoutSchema.shape.h,
+  task: taskSchema.default(''),
 });
 export type TemplateInput = z.input<typeof templateInputSchema>;
+
+/** Text given to a template at launch (typed, or the selection); checked again once composed. */
+const launchTextSchema = z.string().max(LIMITS.taskBytes, `the text is longer than ${LIMITS.taskBytes / 1024} KB`);
+const launchTitleSchema = z
+  .string()
+  .trim()
+  .max(LIMITS.titleChars)
+  .regex(/^[^\p{Cc}]*$/u, 'title cannot contain control characters')
+  .default('');
+
+/** Launch from the quick-launch window: main places the node. */
+export const quickLaunchSchema = z.object({
+  templateId: idSchema,
+  title: launchTitleSchema,
+  text: launchTextSchema.default(''),
+  /** Put the node inside this group. */
+  groupId: idSchema.nullable().default(null),
+});
+export type QuickLaunchInput = z.input<typeof quickLaunchSchema>;
+
+/** Launch from the Launch panel: around `center` of the visible canvas, or inside a group. */
+export const templateLaunchSchema = quickLaunchSchema.extend({
+  center: z.object({ x: finite, y: finite }).optional(),
+});
+export type TemplateLaunchInput = z.input<typeof templateLaunchSchema>;
+
+export const acceleratorSchema = z.string().max(40).refine(isAccelerator, 'use Ctrl, Alt or Super with a letter, digit, F-key or Space');
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  quickLaunch: { shortcut: DEFAULT_QUICK_SHORTCUT, afterLaunch: 'stay' },
+};
+
+export const settingsPatchSchema = z.object({
+  quickLaunch: z.object({ shortcut: acceleratorSchema, afterLaunch: z.enum(['stay', 'flowdeck']) }).partial().optional(),
+});
+export type SettingsPatch = z.input<typeof settingsPatchSchema>;
+
+/** Stored settings, field by field: a bad or missing value falls back to its default. */
+export function readSettings(raw: unknown): AppSettings {
+  const q = (raw as { quickLaunch?: Record<string, unknown> } | null)?.quickLaunch ?? {};
+  const shortcut = acceleratorSchema.safeParse(q.shortcut);
+  const after = z.enum(['stay', 'flowdeck']).safeParse(q.afterLaunch);
+  return {
+    quickLaunch: {
+      shortcut: shortcut.success ? shortcut.data : DEFAULT_SETTINGS.quickLaunch.shortcut,
+      afterLaunch: after.success ? after.data : DEFAULT_SETTINGS.quickLaunch.afterLaunch,
+    },
+  };
+}
 
 /** Font sizes offered for canvas texts (S, M, L, XL). */
 export const ANNOTATION_FONT_SIZES = [14, 20, 32, 48] as const;

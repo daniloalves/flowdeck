@@ -40,6 +40,7 @@ async function launch(): Promise<void> {
       FLOWDECK_SKIP_SHELL_ENV: '1',
       FLOWDECK_HIDE_WINDOW: '1',
       FLOWDECK_DISABLE_NOTIFICATIONS: '1',
+      FLOWDECK_TEST_SHORTCUTS: '1', // never grab real keys on the desktop
       FAKE_AGENT_LOG: fakeLog,
       ANTHROPIC_API_KEY: 'sk-must-not-reach-nodes',
     },

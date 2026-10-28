@@ -48,6 +48,7 @@ test.describe.serial('Node templates and the task launcher', () => {
         FLOWDECK_SKIP_SHELL_ENV: '1',
         FLOWDECK_HIDE_WINDOW: '1',
         FLOWDECK_DISABLE_NOTIFICATIONS: '1',
+        FLOWDECK_TEST_SHORTCUTS: '1', // never grab real keys on the desktop
       },
     });
     page = await app.firstWindow();

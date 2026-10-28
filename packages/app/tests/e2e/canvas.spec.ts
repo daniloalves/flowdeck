@@ -109,6 +109,7 @@ test.describe.serial('Terminal mouse and clipboard, renaming, canvas groups and 
         FLOWDECK_SKIP_SHELL_ENV: '1',
         FLOWDECK_HIDE_WINDOW: '1',
         FLOWDECK_DISABLE_NOTIFICATIONS: '1',
+        FLOWDECK_TEST_SHORTCUTS: '1', // never grab real keys on the desktop
         FLOWDECK_TEST_CLIPBOARD: '1',
         FLOWDECK_TEST_LINKS: '1',
       },

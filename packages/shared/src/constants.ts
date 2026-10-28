@@ -75,7 +75,11 @@ export const LIMITS = {
   taskBytes: 12 * 1024,
   /** Max characters of a link opened from a terminal (login URLs are long). */
   linkChars: 8192,
+  /** Max characters of selected text read for a quick launch (it can be shortened before launching). */
+  selectionChars: 64 * 1024,
 } as const;
+
+export const DEFAULT_QUICK_SHORTCUT = 'Control+Alt+F';
 
 export const USAGE = {
   blockMs: 5 * 60 * 60 * 1000,

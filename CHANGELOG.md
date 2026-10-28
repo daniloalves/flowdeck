@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.0
+
+- **Quick launch from any app**: select text anywhere and press **Ctrl+Alt+F**; a small window
+  over that app shows the text and your templates, and Enter launches a node with it. Uses the
+  selection (or the clipboard), stays in the app you came from (configurable), and asks twice for
+  templates that skip approvals. The shortcut can be changed or turned off; `flowdeck
+  --quick-launch` does the same from a desktop shortcut.
+- **Templates with task text**: `{{selection}}` takes the selected or typed text.
+- **Launch into a group**: the Launch panel and the quick-launch window place the node inside a
+  chosen group, which grows when it is full.
+
+Install on Ubuntu/Debian: `sudo apt install ./flowdeck-0.5.0-amd64.deb` (copy it to `/tmp` first
+if it sits in your home directory). On macOS: `brew install tmux`, then open the app with
+right-click → Open the first time.
+
+Upgrade from 0.4.0: the database migrates automatically (template task text). Ctrl+Alt+F is
+registered when FlowDeck starts; if another app already uses it, pick another shortcut in the
+Launch panel.
+
 ## 0.4.0
 
 - **Selection copies the last character too** (it was left out when the drag ended on it). A

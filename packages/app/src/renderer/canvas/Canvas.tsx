@@ -13,7 +13,7 @@ import {
   type NodeChange,
   type Viewport,
 } from '@xyflow/react';
-import type { NodeLayout } from '@flowdeck/shared';
+import { inside, type NodeLayout } from '@flowdeck/shared';
 import { call, on } from '../api';
 import { useStore } from '../store/store';
 import { GroupNode, TextNode, type GroupFlowNode, type TextFlowNode } from './AnnotationNodes';
@@ -30,9 +30,6 @@ const TEXT_Z = 3000;
 
 /** Items that move with a group being dragged: their start positions. */
 type GroupDrag = { start: { x: number; y: number }; members: Map<string, { x: number; y: number }> };
-
-const inside = (r: NodeLayout, g: NodeLayout): boolean =>
-  r.x >= g.x && r.y >= g.y && r.x + r.w <= g.x + g.w && r.y + r.h <= g.y + g.h;
 
 const STATE_COLOR: Record<string, string> = {
   working: '#5b8cff',

@@ -4,6 +4,7 @@ import {
   INVOKE_CHANNELS,
   idSchema,
   linkOpenSchema,
+  QUICK_CHANNELS,
   ptyInputSchema,
   ptyOpenSchema,
   ptyPasteSchema,
@@ -19,6 +20,7 @@ import { copiedText, preparePaste, type ClipboardLike } from './clipboard';
 import type { Core } from './core';
 import { webUrl, type LinkOpener } from './links';
 import type { PtyBridge } from './pty/bridge';
+import type { QuickLaunch } from './quick/window';
 
 export interface IpcDeps {
   core: Core;
@@ -28,6 +30,7 @@ export interface IpcDeps {
   autostart: { get(): boolean; set(enabled: boolean): boolean };
   clipboard: ClipboardLike;
   links: LinkOpener;
+  quick: QuickLaunch;
 }
 
 type Handler<C extends InvokeChannel> = (
@@ -43,15 +46,18 @@ function errorMessage(err: unknown): string {
 export function registerIpc(deps: IpcDeps): void {
   const { core, pty } = deps;
 
-  const trusted = (event: IpcMainInvokeEvent | IpcMainEvent): boolean => {
-    const win = deps.window();
+  const quickChannels = new Set<string>(QUICK_CHANNELS);
+
+  /** From our own page in the window that owns the channel: the quick-launch window owns only its own. */
+  const trusted = (event: IpcMainInvokeEvent | IpcMainEvent, quick = false): boolean => {
+    const win = quick ? deps.quick.window : deps.window();
     const url = event.senderFrame?.url ?? '';
     return win !== null && event.sender.id === win.webContents.id && deps.isTrustedUrl(url);
   };
 
   function handle<C extends InvokeChannel>(channel: C, fn: Handler<C>): void {
     ipcMain.handle(channel, async (event, ...args: unknown[]): Promise<Result<unknown>> => {
-      if (!trusted(event)) return { ok: false, error: 'untrusted sender' };
+      if (!trusted(event, quickChannels.has(channel))) return { ok: false, error: 'untrusted sender' };
       try {
         return { ok: true, value: await fn(...(args as Parameters<InvokeApi[C]>)) };
       } catch (err) {
@@ -64,7 +70,7 @@ export function registerIpc(deps: IpcDeps): void {
   const handlers: { [C in InvokeChannel]: Handler<C> } = {
     'app:snapshot': () => {
       const snapshot = core.snapshot();
-      return { ...snapshot, env: { ...snapshot.env, autostart: deps.autostart.get() } };
+      return { ...snapshot, env: { ...snapshot.env, autostart: deps.autostart.get(), quickShortcutActive: deps.quick.active } };
     },
     'node:create': (input) => core.createNode(input),
     'node:update': (id, patch) => core.updateNode(idSchema.parse(id), patch),
@@ -87,6 +93,16 @@ export function registerIpc(deps: IpcDeps): void {
     'template:create': (input) => core.saveTemplate(null, input),
     'template:update': (id, input) => core.saveTemplate(idSchema.parse(id), input),
     'template:delete': (id) => core.deleteTemplate(idSchema.parse(id)),
+    'template:launch': (input) => core.launchTemplate(input),
+    'settings:update': (patch) => {
+      const before = core.settings().quickLaunch.shortcut;
+      const settings = core.updateSettings(patch);
+      const { shortcut } = settings.quickLaunch;
+      return { settings, shortcutActive: shortcut === before ? deps.quick.active : deps.quick.setShortcut(shortcut) };
+    },
+    'quick:state': () => deps.quick.state(),
+    'quick:launch': (input) => deps.quick.launch(input),
+    'quick:close': () => deps.quick.close(),
     'account:discover': () => core.discoverAccounts(),
     'account:upsert': (input) => core.upsertAccount(input),
     'account:delete': (id) => core.deleteAccount(idSchema.parse(id)),

@@ -146,3 +146,18 @@ State on 2026-10-27. Understanding, design, architecture and plan: `docs/IMPROVE
 | New dependency `@xterm/addon-web-links@0.12.0` | Snyk package health "Healthy", no known vulnerabilities; `pnpm audit`: 0 vulnerabilities |
 
 The new selection test failed before the fix (`abcdefghi` instead of `abcdefghij`).
+
+# 0.5.0 — quick launch from any app, template task text, launching into a group
+
+State on 2026-10-27. Understanding, spike, design, architecture and plan: `docs/FEATURE-QUICK-LAUNCH.md`.
+
+| Suite | Result |
+|---|---|
+| Typecheck | clean |
+| Shared (+ task composition, unique titles, accelerators, placement inside a group and growing it) + MCP stdio | 18 / 18 |
+| App unit + integration (+ selection normalisation and fallback, `--quick-launch`, test shortcuts, migration v4→v5, settings; `launchTemplate` with real tmux: composed task reaches the agent, unique titles, placement, group growth, errors) | 150 / 150 (2 opt-in real-agent tests skipped) |
+| E2E (Playwright): previous 29 + shortcut registered and shown, selection → quick window → launch into a group, remembered choices, clipboard fallback and Esc, second confirmation for skip-approval templates, each window limited to its channels, Launch panel group and preview, shortcut change/off/reset, after-launch setting, template task field | 37 / 37 |
+| Snyk Code | no finding in the new or changed code; the 34 results are the known items (26 in bundled third-party code under `release/`) |
+| Spike on this desktop (GNOME 46, X11) | `globalShortcut` registers Ctrl+Alt+F; it also "registers" keys GNOME owns, so conflicts cannot be detected; a frameless always-on-top window gets focus |
+
+Every E2E spec sets `FLOWDECK_TEST_SHORTCUTS=1`, so test runs never grab Ctrl+Alt+F on the desktop.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LIMITS, type NodeKind } from '@flowdeck/shared';
+import { LIMITS, SELECTION_PLACEHOLDER, utf8Bytes, type NodeKind } from '@flowdeck/shared';
 import { call } from '../api';
 import { useStore, type TemplateDraft } from '../store/store';
 import { DEFAULT_NODE_SIZE, KindField, LaunchFields, accountAgentOf, fromLaunchArgs, pickAccount, toLaunchArgs, type LaunchConfig } from './nodeFields';
@@ -21,6 +21,7 @@ export function TemplateDialog({ initial, onClose }: { initial: TemplateDraft; o
   });
   const [w, setW] = useState(initial.w ?? DEFAULT_NODE_SIZE.w);
   const [h, setH] = useState(initial.h ?? DEFAULT_NODE_SIZE.h);
+  const [task, setTask] = useState(initial.task ?? '');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export function TemplateDialog({ initial, onClose }: { initial: TemplateDraft; o
       launchArgs: toLaunchArgs(config),
       w,
       h,
+      task: task.trim(),
     };
     try {
       const saved = initial.id ? await call('template:update', initial.id, input) : await call('template:create', input);
@@ -83,6 +85,21 @@ export function TemplateDialog({ initial, onClose }: { initial: TemplateDraft; o
           />
         </label>
         <LaunchFields value={config} onChange={(patch) => setConfig((c) => ({ ...c, ...patch }))} />
+        <label>
+          Task (optional)
+          <textarea
+            className="fd-template-task"
+            value={task}
+            onChange={(e) => setTask(e.target.value)}
+            rows={3}
+            placeholder={`Investigate this and propose a fix:\n\n${SELECTION_PLACEHOLDER}`}
+            name="task"
+          />
+          <span className="fd-muted fd-hint-small">
+            {SELECTION_PLACEHOLDER} takes the selected text (quick launch) or what you type in the Launch panel; without it,
+            that text is added after this one.
+          </span>
+        </label>
         <div className="fd-row fd-size-fields">
           <label className="fd-inline-field">
             Width
@@ -101,7 +118,7 @@ export function TemplateDialog({ initial, onClose }: { initial: TemplateDraft; o
           <button
             type="submit"
             className="fd-btn fd-btn-primary"
-            disabled={busy || !name.trim() || (accountAgent !== null && !config.accountId)}
+            disabled={busy || !name.trim() || (accountAgent !== null && !config.accountId) || utf8Bytes(task) > LIMITS.taskBytes}
             data-testid="save-template"
           >
             Save template

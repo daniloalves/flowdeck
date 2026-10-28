@@ -1,4 +1,4 @@
-import { ANNOTATION_FONT_SIZES, type Annotation, type AnnotationKind, type NodeLayout } from '@flowdeck/shared';
+import { ANNOTATION_FONT_SIZES, GROUP_HEADER, GROUP_PADDING, type Annotation, type AnnotationKind, type NodeLayout } from '@flowdeck/shared';
 import { call } from '../api';
 import { useStore } from '../store/store';
 
@@ -11,9 +11,6 @@ export const DEFAULT_SIZE: Record<AnnotationKind, { w: number; h: number }> = {
   group: { w: 640, h: 420 },
   text: { w: 280, h: 40 },
 };
-
-const GROUP_PADDING = 32;
-const GROUP_HEADER = 36;
 
 const reportError = (err: unknown) => useStore.getState().toast('error', (err as Error).message);
 

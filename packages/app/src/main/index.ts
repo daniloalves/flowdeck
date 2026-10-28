@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { app, BrowserWindow, clipboard, dialog, Notification, session, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, Notification, session, shell } from 'electron';
 import type { EventApi, EventChannel } from '@flowdeck/shared';
 import { autostartFile, isAutostartEnabled, setAutostart } from './autostart';
 import { memoryClipboard, systemClipboard, type ClipboardLike } from './clipboard';
@@ -11,6 +11,8 @@ import { Repo } from './db/repo';
 import { registerIpc } from './ipc';
 import { memoryLinks, rateLimited, systemLinks, type LinkOpener } from './links';
 import { PtyBridge } from './pty/bridge';
+import { memoryShortcuts, systemShortcuts, wantsQuickLaunch, type ShortcutRegistry } from './quick/selection';
+import { QuickLaunch } from './quick/window';
 import { ensurePrivateDir, installRuntimeFiles, resolveRuntime } from './runtime';
 import { loginShellPath, mergePath, which } from './shellenv';
 import { sanitizeEnv } from './tmux/env';
@@ -26,6 +28,7 @@ let mainWindow: BrowserWindow | null = null;
 let core: Core | null = null;
 let ptyBridge: PtyBridge | null = null;
 let db: Db | null = null;
+let quick: QuickLaunch | null = null;
 
 function emit<C extends EventChannel>(channel: C, payload: EventApi[C]): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
@@ -63,6 +66,27 @@ function appLinks(): LinkOpener {
   const memory = memoryLinks();
   (globalThis as { __flowdeckLinks?: string[] }).__flowdeckLinks = memory.opened;
   return rateLimited(memory, 500);
+}
+
+/** System-wide shortcuts, or ones that never grab a real key for E2E tests (exposed to Playwright). */
+function appShortcuts(): ShortcutRegistry {
+  if (!process.env.FLOWDECK_TEST_SHORTCUTS) return systemShortcuts(globalShortcut);
+  const memory = memoryShortcuts();
+  (globalThis as { __flowdeckShortcuts?: typeof memory }).__flowdeckShortcuts = memory;
+  return memory;
+}
+
+/** A desktop notification; clicking it shows the node in FlowDeck. */
+function notify(title: string, body: string, nodeId: string): void {
+  if (process.env.FLOWDECK_DISABLE_NOTIFICATIONS || !Notification.isSupported()) return;
+  const n = new Notification({ title, body, silent: false });
+  n.on('click', () => {
+    if (!mainWindow) return;
+    mainWindow.show();
+    mainWindow.focus();
+    emit('ui:focusNode', { nodeId });
+  });
+  n.show();
 }
 
 async function bootstrap(): Promise<void> {
@@ -108,19 +132,7 @@ async function bootstrap(): Promise<void> {
     mcpRunner: { command: mcpCommand, args: [paths.mcpScript], env: { ELECTRON_RUN_AS_NODE: '1' } },
     emit,
     isAppFocused: () => mainWindow?.isFocused() ?? false,
-    notifier: {
-      notify(title, body, nodeId) {
-        if (process.env.FLOWDECK_DISABLE_NOTIFICATIONS || !Notification.isSupported()) return;
-        const n = new Notification({ title, body, silent: false });
-        n.on('click', () => {
-          if (!mainWindow) return;
-          mainWindow.show();
-          mainWindow.focus();
-          emit('ui:focusNode', { nodeId });
-        });
-        n.show();
-      },
-    },
+    notifier: { notify },
   });
   core.pruneNodeDirs();
 
@@ -151,11 +163,23 @@ async function bootstrap(): Promise<void> {
           set: (enabled: boolean) => setAutostart(autostartPath, enabled, autostartExec),
         };
 
+  const clipboardAccess = appClipboard();
+  quick = new QuickLaunch({
+    core,
+    clipboard: clipboardAccess,
+    shortcuts: appShortcuts(),
+    mainWindow: () => mainWindow,
+    emit,
+    notify,
+    hidden: Boolean(process.env.FLOWDECK_HIDE_WINDOW),
+  });
+
   registerIpc({
     core,
     pty: ptyBridge,
-    clipboard: appClipboard(),
+    clipboard: clipboardAccess,
     links: appLinks(),
+    quick,
     window: () => mainWindow,
     isTrustedUrl,
     autostart,
@@ -165,13 +189,21 @@ async function bootstrap(): Promise<void> {
   mainWindow = createMainWindow();
   mainWindow.on('closed', () => {
     mainWindow = null;
+    // The hidden quick-launch window must not keep FlowDeck running.
+    quick?.destroy();
   });
+  quick.setShortcut(core.settings().quickLaunch.shortcut);
+  if (wantsQuickLaunch(process.argv)) void quick.open();
 }
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
+    if (quick && wantsQuickLaunch(argv)) {
+      void quick.open();
+      return;
+    }
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
@@ -189,6 +221,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('window-all-closed', () => app.quit());
+  app.on('will-quit', () => quick?.setShortcut(''));
 
   let stopping = false;
   app.on('before-quit', (event) => {

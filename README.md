@@ -30,8 +30,8 @@ credentials read.
 
 ```bash
 sudo apt install tmux curl
-cp packages/app/release/flowdeck-0.4.0-amd64.deb /tmp/   # apt reads it as an unprivileged user
-sudo apt install /tmp/flowdeck-0.4.0-amd64.deb             # sets up Chromium's sandbox + AppArmor profile
+cp packages/app/release/flowdeck-0.5.0-amd64.deb /tmp/   # apt reads it as an unprivileged user
+sudo apt install /tmp/flowdeck-0.5.0-amd64.deb             # sets up Chromium's sandbox + AppArmor profile
 ```
 
 **macOS (experimental, unsigned, untested on real hardware):** a `.dmg` is built for Apple Silicon
@@ -62,7 +62,17 @@ system login (`kiro-cli login`).
   on the canvas and the agent starts working on the task. The task is the agent's first prompt,
   passed on its command line: it is sent once (never again on a resume), it is limited to 12 KB,
   and other processes on this computer can read it while the agent runs, so keep secrets out of
-  it. A Shell template types the task as commands.
+  it. A Shell template types the task as commands. A template can also hold its own **task text**:
+  `{{selection}}` in it takes what you type (or select, below); without it, your text is added
+  after it. Pick a **Group** to launch the node inside one (a full group grows to fit).
+- **Quick launch from any app**: select text anywhere (browser, editor, VS Code, Teams…) and press
+  **Ctrl+Alt+F**. A small window opens over that app with the selected text (or the clipboard when
+  nothing is selected) and your templates: type to filter, pick a group, press **Enter**. You stay
+  in the app you came from; a notification shows the new node (Launch panel → *After a quick
+  launch* switches to FlowDeck instead). A template that skips approval prompts asks for a second
+  confirmation, since selected text can carry instructions. Change or turn off the shortcut in the
+  Launch panel. On Wayland, or with FlowDeck closed, bind `flowdeck --quick-launch` to a shortcut
+  in your desktop's keyboard settings.
 - Drag by the header, resize when selected, double-click the header to zoom to 100 %.
   Rename with ✎ in the header or in the Terminals panel (or double-click the title).
 - **Terminal text** (Ubuntu conventions): selecting with the mouse copies (PRIMARY and clipboard);

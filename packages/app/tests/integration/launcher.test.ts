@@ -85,6 +85,63 @@ describe('task launcher', () => {
     await waitFor(async () => (await screen(node.id)).includes('LAUNCHED-42'));
   });
 
+  it('launching a template composes its task, picks a unique title and places the node', async () => {
+    const t = h.core.saveTemplate(null, {
+      name: 'Fixer',
+      kind: 'claude',
+      title: 'fixer',
+      cwd: project,
+      accountId: 'default',
+      w: 500,
+      h: 300,
+      task: 'Investigate this error:\n{{selection}}',
+    });
+    const a = await h.core.launchTemplate({ templateId: t.id, text: 'TypeError: x is undefined', center: { x: 1000, y: 1000 } });
+    expect(a).toMatchObject({ title: 'fixer', x: 750, y: 850, w: 500, h: 300 });
+    await waitFor(() => claudePrompts(a.id).includes('Investigate this error:\nTypeError: x is undefined'));
+    const b = await h.core.launchTemplate({ templateId: t.id, text: 'second', center: { x: 1000, y: 1000 } });
+    expect(b).toMatchObject({ title: 'fixer #2', x: 790, y: 890 });
+    const c = await h.core.launchTemplate({ templateId: t.id, title: 'mine', text: '' });
+    expect(c.title).toBe('mine');
+    await waitFor(() => claudePrompts(c.id).includes('Investigate this error:'));
+    expect(h.events.filter((e) => e.channel === 'node:changed' && (e.payload as { id: string }).id === c.id).length).toBeGreaterThan(0);
+
+    expect(h.core.describeTemplates().find((x) => x.id === t.id)).toMatchObject({ skipsApprovals: false, problem: null, task: t.task });
+    await expect(h.core.launchTemplate({ templateId: 'missing' })).rejects.toThrow(/template not found/);
+    await expect(h.core.launchTemplate({ templateId: t.id, text: 'x'.repeat(12 * 1024) })).rejects.toThrow(/longer than 12 KB/);
+  });
+
+  it('a template launched into a group lands inside it, and a full group grows', async () => {
+    const t = h.core.saveTemplate(null, { name: 'Small', kind: 'shell', cwd: project, accountId: null, w: 300, h: 200 });
+    const group = h.core.createAnnotation({ kind: 'group', text: 'Team', color: '#7c6cf2', x: 5000, y: 5000, w: 420, h: 320 });
+    expect(h.core.groups()).toContainEqual({ id: group.id, title: 'Team', color: '#7c6cf2' });
+    const inGroup = (n: { x: number; y: number; w: number; h: number }, g: typeof group) =>
+      n.x >= g.x && n.y >= g.y && n.x + n.w <= g.x + g.w && n.y + n.h <= g.y + g.h;
+
+    const first = await h.core.launchTemplate({ templateId: t.id, groupId: group.id });
+    expect(inGroup(first, h.repo.getAnnotation(group.id)!)).toBe(true);
+    expect(h.repo.getAnnotation(group.id)!.h).toBe(320);
+
+    const second = await h.core.launchTemplate({ templateId: t.id, groupId: group.id });
+    const grown = h.repo.getAnnotation(group.id)!;
+    expect(grown.h).toBeGreaterThan(320);
+    expect(inGroup(first, grown) && inGroup(second, grown)).toBe(true);
+    expect(h.events.some((e) => e.channel === 'annotation:changed' && (e.payload as { id: string; h: number }).h === grown.h)).toBe(true);
+
+    const text = h.core.createAnnotation({ kind: 'text', text: 'note', color: '#ffffff', x: 0, y: 0, w: 100, h: 40 });
+    await expect(h.core.launchTemplate({ templateId: t.id, groupId: text.id })).rejects.toThrow(/group not found/);
+  });
+
+  it('settings default to Ctrl+Alt+F and staying in the source app; bad shortcuts are refused', () => {
+    expect(h.core.snapshot().settings).toEqual({ quickLaunch: { shortcut: 'Control+Alt+F', afterLaunch: 'stay' } });
+    expect(h.core.updateSettings({ quickLaunch: { afterLaunch: 'flowdeck' } })).toEqual({
+      quickLaunch: { shortcut: 'Control+Alt+F', afterLaunch: 'flowdeck' },
+    });
+    expect(h.core.updateSettings({ quickLaunch: { shortcut: '' } }).quickLaunch).toEqual({ shortcut: '', afterLaunch: 'flowdeck' });
+    expect(() => h.core.updateSettings({ quickLaunch: { shortcut: 'F' } })).toThrow();
+    h.core.updateSettings({ quickLaunch: { shortcut: 'Control+Alt+F', afterLaunch: 'stay' } });
+  });
+
   it('refused launches leave no node and no tmux session behind', async () => {
     const before = h.repo.listNodes().length;
     const panes = (await sessions()).length;

@@ -113,4 +113,8 @@ export const MIGRATIONS: readonly string[] = [
     created_at  INTEGER NOT NULL
   );
   `,
+
+  /* 5 — a template's own task text ({{selection}} takes the selected or typed text) */ `
+  ALTER TABLE node_template ADD COLUMN task TEXT NOT NULL DEFAULT '';
+  `,
 ];

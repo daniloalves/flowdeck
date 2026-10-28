@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { migrate } from '../../src/main/db/database';
 import { MIGRATIONS } from '../../src/main/db/migrations';
 import { Repo, type NodeWithToken } from '../../src/main/db/repo';
+import { readSettings } from '@flowdeck/shared';
 
 function memoryRepo(): Repo {
   const db = new Database(':memory:');
@@ -90,24 +91,44 @@ describe('database', () => {
     expect(repo.listAnnotations().map((a) => a.text)).toEqual(['hi']);
     expect(repo.listTemplates()).toEqual([]);
     expect(() =>
-      db.exec("INSERT INTO node_template VALUES ('x','X','vim','','/p',NULL,'[]',720,440,1)"),
+      db.exec("INSERT INTO node_template (id, name, kind, cwd, w, h, created_at) VALUES ('x','X','vim','/p',720,440,1)"),
     ).toThrow(/CHECK/);
   });
 
   it('templates: save inserts or replaces (keeping the creation time), sorted by name; a deleted account is cleared', () => {
     const repo = memoryRepo();
     repo.upsertAccount({ id: 'work', agent: 'claude', label: 'Work', configDir: '/h/.claude-work', color: '#ffffff', cap5h: null, cap7d: null });
-    const base = { kind: 'claude' as const, title: '', cwd: '/p', accountId: 'work', launchArgs: ['--model', 'opus'], w: 720, h: 440 };
+    const base = { kind: 'claude' as const, title: '', cwd: '/p', accountId: 'work', launchArgs: ['--model', 'opus'], w: 720, h: 440, task: '' };
     repo.saveTemplate({ ...base, id: 'b', name: 'beta', createdAt: 1 });
     repo.saveTemplate({ ...base, id: 'a', name: 'Alpha', createdAt: 2 });
     expect(repo.listTemplates().map((t) => t.name)).toEqual(['Alpha', 'beta']);
-    repo.saveTemplate({ ...base, id: 'b', name: 'beta', title: 'Reviewer', w: 900, createdAt: 99 });
-    expect(repo.getTemplate('b')).toMatchObject({ title: 'Reviewer', w: 900, createdAt: 1, launchArgs: ['--model', 'opus'] });
+    repo.saveTemplate({ ...base, id: 'b', name: 'beta', title: 'Reviewer', w: 900, task: 'Fix:\n{{selection}}', createdAt: 99 });
+    expect(repo.getTemplate('b')).toMatchObject({ title: 'Reviewer', w: 900, task: 'Fix:\n{{selection}}', createdAt: 1, launchArgs: ['--model', 'opus'] });
     expect(repo.countTemplates()).toBe(2);
     repo.deleteAccount('work');
     expect(repo.getTemplate('a')!.accountId).toBeNull();
     repo.deleteTemplate('a');
     expect(repo.listTemplates().map((t) => t.id)).toEqual(['b']);
+  });
+
+  it('migrates v4 templates to v5 with an empty task', () => {
+    const db = new Database(':memory:');
+    for (const m of MIGRATIONS.slice(0, 4)) db.exec(m);
+    db.pragma('user_version = 4');
+    db.exec("INSERT INTO node_template (id, name, kind, cwd, w, h, created_at) VALUES ('t','T','shell','/p',720,440,1)");
+    migrate(db);
+    expect(new Repo(db).getTemplate('t')).toMatchObject({ name: 'T', task: '' });
+  });
+
+  it('settings: defaults until saved; stored values are checked field by field', () => {
+    const repo = memoryRepo();
+    expect(readSettings(repo.getSettings())).toEqual({ quickLaunch: { shortcut: 'Control+Alt+F', afterLaunch: 'stay' } });
+    repo.setSettings({ quickLaunch: { shortcut: 'Control+Alt+K', afterLaunch: 'flowdeck' } });
+    expect(readSettings(repo.getSettings())).toEqual({ quickLaunch: { shortcut: 'Control+Alt+K', afterLaunch: 'flowdeck' } });
+    expect(readSettings({ quickLaunch: { shortcut: 'F', afterLaunch: 'nowhere' } })).toEqual({
+      quickLaunch: { shortcut: 'Control+Alt+F', afterLaunch: 'stay' },
+    });
+    expect(readSettings({ quickLaunch: { shortcut: '' } }).quickLaunch.shortcut).toBe('');
   });
 
   it('round-trips groups and texts; updates merge; deletes', () => {

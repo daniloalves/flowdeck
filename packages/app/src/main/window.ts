@@ -46,8 +46,30 @@ export function createMainWindow(): BrowserWindow {
     webPreferences: { ...SECURE_WEB_PREFERENCES, preload: join(__dirname, '../preload/index.js') },
   });
   if (!process.env.FLOWDECK_HIDE_WINDOW) win.once('ready-to-show', () => win.show());
-  const dev = devServerUrl();
-  if (dev) void win.loadURL(dev);
-  else void win.loadFile(rendererFile());
+  loadRenderer(win);
   return win;
+}
+
+/** The quick-launch window: the same renderer bundle, opened as `#quick`. Shown on demand. */
+export function createQuickWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 560,
+    height: 620,
+    title: 'FlowDeck — Quick launch',
+    backgroundColor: '#1c1c24',
+    frame: false,
+    resizable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: false,
+    webPreferences: { ...SECURE_WEB_PREFERENCES, preload: join(__dirname, '../preload/index.js') },
+  });
+  loadRenderer(win, 'quick');
+  return win;
+}
+
+function loadRenderer(win: BrowserWindow, hash?: string): void {
+  const dev = devServerUrl();
+  if (dev) void win.loadURL(hash ? `${dev}#${hash}` : dev);
+  else void win.loadFile(rendererFile(), hash ? { hash } : {});
 }

@@ -2,6 +2,7 @@ import type {
   Account,
   Annotation,
   AnnotationPatch,
+  AppSettings,
   Delivery,
   Edge,
   EdgeDirection,
@@ -93,6 +94,7 @@ interface TemplateRow {
   launch_args: string;
   w: number;
   h: number;
+  task: string;
   created_at: number;
 }
 
@@ -159,6 +161,7 @@ const toTemplate = (r: TemplateRow): NodeTemplate => ({
   launchArgs: parseArgs(r.launch_args),
   w: r.w,
   h: r.h,
+  task: r.task,
   createdAt: r.created_at,
 });
 
@@ -434,11 +437,11 @@ export class Repo {
   saveTemplate(t: NodeTemplate): void {
     this.db
       .prepare(
-        `INSERT INTO node_template (id, name, kind, title, cwd, account_id, launch_args, w, h, created_at)
-         VALUES (@id, @name, @kind, @title, @cwd, @accountId, @launchArgs, @w, @h, @createdAt)
+        `INSERT INTO node_template (id, name, kind, title, cwd, account_id, launch_args, w, h, task, created_at)
+         VALUES (@id, @name, @kind, @title, @cwd, @accountId, @launchArgs, @w, @h, @task, @createdAt)
          ON CONFLICT(id) DO UPDATE SET name = excluded.name, kind = excluded.kind, title = excluded.title,
            cwd = excluded.cwd, account_id = excluded.account_id, launch_args = excluded.launch_args,
-           w = excluded.w, h = excluded.h`,
+           w = excluded.w, h = excluded.h, task = excluded.task`,
       )
       .run({ ...t, launchArgs: JSON.stringify(t.launchArgs) });
   }
@@ -459,6 +462,23 @@ export class Repo {
     } catch {
       return null;
     }
+  }
+
+  /** Settings as stored; `readSettings` checks them field by field. */
+  getSettings(): unknown {
+    const row = this.db.prepare("SELECT value FROM app_state WHERE key = 'settings'").get() as { value: string } | undefined;
+    if (!row) return null;
+    try {
+      return JSON.parse(row.value) as unknown;
+    } catch {
+      return null;
+    }
+  }
+
+  setSettings(settings: AppSettings): void {
+    this.db
+      .prepare("INSERT INTO app_state (key, value) VALUES ('settings', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .run(JSON.stringify(settings));
   }
 
   setViewport(v: Viewport): void {
